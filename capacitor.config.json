@@ -1,0 +1,9 @@
+{
+  "appId": "com.govtech.lrmasterledger",
+  "appName": "LR Master Ledger",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

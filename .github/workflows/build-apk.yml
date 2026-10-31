@@ -1,0 +1,75 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java JDK 17 for Android Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Dependencies & Build Web Bundle
+        run: |
+          npm install
+          npm run build
+
+      - name: Initialize Capacitor Android & Sync Web Assets
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android --no-save
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build Installable Android APK via Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          mkdir -p ../releases
+          cp app/build/outputs/apk/debug/app-debug.apk ../releases/LR_Master_Ledger_v2.0.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LR_Master_Ledger_v2.0.apk
+          path: releases/LR_Master_Ledger_v2.0.apk
+
+      - name: Publish APK to GitHub Releases (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.0
+          name: "LR Master Ledger Studio v2.0 (Android APK)"
+          body: |
+            ### 📱 Installable Android APK — LR Master Ledger & Inventory Studio v2.0
+            - **Direct APK File**: Download `LR_Master_Ledger_v2.0.apk` below and open it on your Android phone to install.
+            - **Features**:
+              - Recursive Phone Memory Folder & Subfolder Upload
+              - Mouza-Best Separate Table A4 Landscape PDF Engine (0% Missing Records)
+              - 100% Offline In-Memory Processing
+          files: releases/LR_Master_Ledger_v2.0.apk
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

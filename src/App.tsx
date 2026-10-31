@@ -627,12 +627,23 @@ export default function App() {
                   </span>
                 </button>
 
+                <a
+                  href="https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest/download/LR_Master_Ledger_v2.0.apk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
+                  title="GitHub Repository থেকে সরাসরি .APK ডাউনলোড করুন"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>GitHub .APK ডাউনলোড</span>
+                </a>
+
                 <button
                   onClick={() => setIsApkModalOpen(true)}
                   className="px-3 py-2 text-xs font-medium text-amber-300 bg-[#1e2a44] hover:bg-[#273757] border border-amber-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
                 >
                   <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                  <span>GitHub ও APK</span>
+                  <span>ফোনে ইনস্টল ও APK হাব</span>
                 </button>
               </div>
             </div>
@@ -752,6 +763,7 @@ export default function App() {
       <ApkDownloadModal
         isOpen={isApkModalOpen}
         onClose={() => setIsApkModalOpen(false)}
+        records={records}
       />
     </div>
   );

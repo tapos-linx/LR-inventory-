@@ -2,8 +2,15 @@
 > **High-Performance GovTech Companion Application for LR Mass Downloader (Bangladesh Land Records)**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-amber.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Platform: Web & Android APK](https://img.shields.io/badge/Platform-Web%20%7C%20Android%20APK-emerald.svg)](#android-apk--mobile-companion)
-[![Processing: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Client--Side-blue.svg)](#1-purpose--project-overview)
+[![Download Android APK](https://img.shields.io/badge/Download%20Android%20APK-LR__Master__Ledger__v2.0.apk-10b981?style=for-the-badge&logo=android)](https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest/download/LR_Master_Ledger_v2.0.apk)
+[![GitHub Releases](https://img.shields.io/badge/GitHub%20Releases-v2.0.0-fbbf24?style=for-the-badge&logo=github)](https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest)
+
+---
+
+## 📲 Quick Android APK Download (For Mobile Users)
+- **📦 Direct `.APK` File Download**: [**Click Here to Download `LR_Master_Ledger_v2.0.apk`**](https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest/download/LR_Master_Ledger_v2.0.apk)
+- **📂 GitHub Releases Page**: [https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest](https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest)
+- **⚙️ Automated GitHub Actions APK Builder**: Included in [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml) — every push to `main` automatically compiles the Android `.apk` via Capacitor + Gradle and attaches `LR_Master_Ledger_v2.0.apk` to GitHub Releases.
 
 ---
 
