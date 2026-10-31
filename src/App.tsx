@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   FileSpreadsheet,
   Printer,
@@ -8,14 +8,15 @@ import {
   CheckCircle2,
   PieChart,
   MapPin,
-  RefreshCw,
-  Sparkles,
   ShieldCheck,
-  FolderTree,
   Download,
   Building2,
   Smartphone,
-  ExternalLink,
+  FolderArchive,
+  Files,
+  FileArchive,
+  Loader2,
+  RotateCcw,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { HierarchyExplorer } from './components/HierarchyExplorer';
@@ -39,7 +40,11 @@ import {
   parseAcreValue,
   toBengaliNumber,
 } from './utils/bengaliNumerals';
-import { buildArchiveFileTree } from './utils/archiveParser';
+import {
+  buildArchiveFileTree,
+  parseFolderIngestion,
+  parseZipIngestion,
+} from './utils/archiveParser';
 
 export default function App() {
   // Main Data States
@@ -75,6 +80,11 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeView, setActiveView] = useState<'ledger' | 'print' | 'tree'>('ledger');
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
+  const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
+
+  // Quick Home Upload Status
+  const [isQuickUploading, setIsQuickUploading] = useState(false);
+  const [quickUploadMsg, setQuickUploadMsg] = useState<string | null>(null);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,8 +102,63 @@ export default function App() {
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
 
-  // Distinct Upazilas across all records
+  // Callback ref to ensure webkitdirectory is set natively on the home page quick-folder input
+  const setHomeFolderAttributes = useCallback((node: HTMLInputElement | null) => {
+    if (node) {
+      node.setAttribute('webkitdirectory', '');
+      node.setAttribute('directory', '');
+      node.setAttribute('mozdirectory', '');
+      node.setAttribute('multiple', '');
+    }
+  }, []);
+
+  // Distinct Upazilas & Mouzas across all records
   const availableUpazilas = Array.from(new Set(records.map((r) => r.upazila))).filter(Boolean);
+  const availableMouzasForScope = Array.from(
+    new Set(
+      (printUpazilaScope
+        ? records.filter((r) => r.upazila === printUpazilaScope)
+        : records
+      ).map((r) => r.mouza)
+    )
+  ).filter(Boolean);
+
+  // Group Mouza summaries for the Home Page Mouza-Best PDF Implementation Hub
+  const mouzaCards = React.useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        mouza: string;
+        jlNo: string;
+        upazila: string;
+        district: string;
+        surveys: Set<string>;
+        count: number;
+        totalAcre: number;
+      }
+    >();
+
+    for (const r of records) {
+      const key = `${r.upazila}__${r.mouza}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          mouza: r.mouza,
+          jlNo: r.jlNo,
+          upazila: r.upazila,
+          district: r.district,
+          surveys: new Set([r.surveyType]),
+          count: 0,
+          totalAcre: 0,
+        });
+      }
+      const entry = map.get(key)!;
+      entry.count++;
+      entry.surveys.add(r.surveyType);
+      entry.totalAcre += parseAcreValue(r.area);
+    }
+
+    return Array.from(map.values());
+  }, [records]);
 
   // Filtering Logic
   const filteredRecords = records.filter((rec) => {
@@ -137,25 +202,26 @@ export default function App() {
   const totalAcreValue = filteredRecords.reduce((acc, r) => acc + parseAcreValue(r.area), 0);
   const verifiedCount = filteredRecords.filter((r) => r.verified).length;
 
-  // Ingestion Handlers
+  // Ingestion Handler (Preserves 100% of uploaded records — zero missing)
   const handleIngestionComplete = (
     newRecords: LandRecord[],
     summary: IngestionSummary,
-    tree: IngestedArchiveNode
+    tree: IngestedArchiveNode,
+    replaceExisting = true
   ) => {
-    // Append records without dropping any
+    if (newRecords.length === 0) return;
+
     setRecords((prev) => {
-      const combined = [...newRecords, ...prev];
-      const seen = new Set<string>();
-      return combined.filter((r) => {
-        const key = `${r.district}_${r.upazila}_${r.mouza}_${r.khatianNo}_${r.dagNo}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const base = replaceExisting ? newRecords : [...newRecords, ...prev];
+      return base.map((r, idx) => ({ ...r, slNo: idx + 1 }));
     });
 
     setArchiveTree(tree);
+    setSelectedDistrict('');
+    setSelectedUpazila('');
+    setSelectedMouza('');
+    setPrintUpazilaScope('');
+    setPrintMouzaScope('');
 
     // Dynamic Schema update
     if (summary.extraColumnsDetected.length > 0) {
@@ -175,7 +241,33 @@ export default function App() {
       });
     }
 
-    setIsIngestOpen(false);
+    setQuickUploadMsg(
+      `সফলভাবে ${toBengaliNumber(summary.totalFiles)} টি ফাইল থেকে ${toBengaliNumber(
+        summary.totalRecordsExtracted
+      )} টি রেকর্ড (${toBengaliNumber(summary.mouzasFound.length)} টি মৌজা) লোড হয়েছে!`
+    );
+    setTimeout(() => setQuickUploadMsg(null), 8000);
+  };
+
+  // Direct Home Page Upload Handler (for instant mobile/desktop folder or file upload)
+  const handleDirectHomeUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsQuickUploading(true);
+    setQuickUploadMsg(`ফোন/মেমোরি থেকে ${toBengaliNumber(files.length)} টি ফাইল স্ক্যান হচ্ছে...`);
+
+    try {
+      const firstFile = files[0];
+      const result =
+        files.length === 1 && firstFile.name.toLowerCase().endsWith('.zip')
+          ? await parseZipIngestion(firstFile)
+          : await parseFolderIngestion(files);
+
+      handleIngestionComplete(result.records, result.summary, result.tree, true);
+    } catch (err: any) {
+      setQuickUploadMsg(`আপলোড ত্রুটি: ${err.message || 'অজ্ঞাত ত্রুটি'}`);
+    } finally {
+      setIsQuickUploading(false);
+    }
   };
 
   // Node selection from Hierarchy Explorer
@@ -242,16 +334,8 @@ export default function App() {
 
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
-    if (
-      confirm(
-        `আপনি কি নিশ্চিত যে নির্বাচিত ${toBengaliNumber(
-          selectedIds.size
-        )} টি রেকর্ড মুছে ফেলতে চান?`
-      )
-    ) {
-      setRecords((prev) => prev.filter((r) => !selectedIds.has(r.id)));
-      setSelectedIds(new Set());
-    }
+    setRecords((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+    setSelectedIds(new Set());
   };
 
   // Export Handlers
@@ -269,27 +353,26 @@ export default function App() {
     exportToCSV(filteredRecords, columns, 'LR_Master_Ledger_Full');
   };
 
-  const handleTriggerQuickPdf = (upazila?: string) => {
+  const handleTriggerQuickPdf = (upazila?: string, mouza?: string) => {
     setPrintUpazilaScope(upazila || '');
+    setPrintMouzaScope(mouza || '');
     setActiveView('print');
   };
 
   const handleResetToSample = () => {
-    if (confirm('নমুনা ডাটায় রিসেট করতে চান? আপনার বর্তমান পরিবর্তন রিসেট হবে।')) {
-      setRecords(INITIAL_MOCK_RECORDS);
-      setSelectedIds(new Set());
-      setSelectedDistrict('');
-      setSelectedUpazila('');
-      setSelectedMouza('');
-      setSearchQuery('');
-    }
+    setRecords(INITIAL_MOCK_RECORDS);
+    setSelectedIds(new Set());
+    setSelectedDistrict('');
+    setSelectedUpazila('');
+    setSelectedMouza('');
+    setSearchQuery('');
   };
 
-  // Target records for Print View: Ensure no records from the uploaded sources are missing!
+  // Target records for Print View: Ensure 100% of uploaded records are available!
   const printTargetRecords =
     selectedIds.size > 0
       ? records.filter((r) => selectedIds.has(r.id))
-      : records; // Default to all uploaded records so none are missing!
+      : records;
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
@@ -307,7 +390,7 @@ export default function App() {
         onAddNewRecord={handleOpenNew}
         onResetToSample={handleResetToSample}
         onOpenApkModal={() => setIsApkModalOpen(true)}
-        onQuickPdfDownload={handleTriggerQuickPdf}
+        onQuickPdfDownload={(upz) => handleTriggerQuickPdf(upz, '')}
         availableUpazilas={availableUpazilas}
       />
 
@@ -318,9 +401,99 @@ export default function App() {
           columns={columns}
           onBack={() => setActiveView('ledger')}
           initialSelectedUpazila={printUpazilaScope}
+          initialSelectedMouza={printMouzaScope}
         />
       ) : (
         <main className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col space-y-4">
+          {/* Quick Direct Phone Memory & Subfolder Upload Bar (No Modal Required!) */}
+          <section className="bg-gradient-to-r from-[#141d33] via-[#18233c] to-[#12192c] border border-amber-500/40 rounded-xl p-3.5 sm:p-4 shadow-xl font-bengali">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                    <span>ফোন মেমোরি ও সাব-ফোল্ডার ডিরেক্ট আপলোড (Phone & Folder Upload)</span>
+                    <span className="text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
+                      সকল সাব-ফোল্ডার সাপোর্ট
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-300">
+                    আপনার ফোনে বা পিসিতে ডাউনলোড করা সম্পূর্ণ ফোল্ডার, একাধিক ফাইল (PDF, ছবি, Excel, CSV) অথবা ZIP সরাসরি এখান থেকেই সিলেক্ট করুন।
+                  </p>
+                </div>
+              </div>
+
+              {/* Native <label> Upload Buttons directly on the Home Screen for 100% Mobile Compatibility */}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="cursor-pointer px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all">
+                  <FolderArchive className="w-4 h-4 stroke-[2.5]" />
+                  <span>ফোল্ডার ও সাব-ফোল্ডার নির্বাচন</span>
+                  <input
+                    type="file"
+                    ref={setHomeFolderAttributes}
+                    className="sr-only"
+                    onChange={(e) => {
+                      handleDirectHomeUpload(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+
+                <label className="cursor-pointer px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all">
+                  <Files className="w-4 h-4 stroke-[2.5]" />
+                  <span>ফোন মেমোরি ফাইল / ZIP নির্বাচন</span>
+                  <input
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    onChange={(e) => {
+                      handleDirectHomeUpload(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+
+                <button
+                  onClick={() => setIsIngestOpen(true)}
+                  className="px-3 py-2 rounded-lg bg-[#1d2944] hover:bg-[#263556] border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
+                >
+                  অ্যাডভান্সড অপশন
+                </button>
+
+                <button
+                  onClick={handleResetToSample}
+                  title="নমুনা ডাটা রিসেট করুন"
+                  className="p-2 rounded-lg bg-[#161f33] hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-amber-300 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {(isQuickUploading || quickUploadMsg) && (
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-emerald-300 font-semibold">
+                  {isQuickUploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  )}
+                  <span>{quickUploadMsg}</span>
+                </div>
+                {!isQuickUploading && (
+                  <button
+                    onClick={() => handleTriggerQuickPdf('', '')}
+                    className="px-3 py-1 bg-amber-400 text-slate-950 font-bold rounded text-xs hover:bg-amber-300"
+                  >
+                    মৌজাভিত্তিক PDF দেখুন →
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+
           {/* Top Metric Cards */}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
@@ -366,13 +539,13 @@ export default function App() {
 
             <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
               <div className="space-y-0.5 font-bengali">
-                <span className="text-[11px] text-slate-400 font-medium">যাচাইকৃত খতিয়ান রেকর্ড</span>
+                <span className="text-[11px] text-slate-400 font-medium">মোট মৌজা ও রেকর্ড</span>
                 <div className="text-xl sm:text-2xl font-bold font-mono-num text-amber-200">
-                  {toBengaliNumber(verifiedCount)} / {toBengaliNumber(filteredRecords.length)}
+                  {toBengaliNumber(mouzaCards.length)} মৌজা ({toBengaliNumber(filteredRecords.length)})
                 </div>
                 <div className="text-[10px] text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 inline" />
-                  <span>রেজিস্ট্রি ভ্যালিডেটেড</span>
+                  <span>১০০% রেকর্ড অন্তর্ভুক্ত</span>
                 </div>
               </div>
               <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
@@ -381,60 +554,124 @@ export default function App() {
             </div>
           </section>
 
-          {/* Quick PDF & APK Action Banner directly in UI Home Page */}
-          <section className="bg-gradient-to-r from-[#12192b] via-[#162138] to-[#111726] border border-amber-500/30 rounded-xl p-4 shadow-lg flex flex-wrap items-center justify-between gap-4 font-bengali">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-                <Printer className="w-5 h-5" />
+          {/* Mouza-Best PDF Implementation Hub (মৌজাভিত্তিক মাস্টার PDF হাব) */}
+          <section className="bg-[#121827] border border-amber-500/30 rounded-xl p-4 shadow-lg space-y-3 font-bengali">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Printer className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+                    <span>মৌজাভিত্তিক মাস্টার PDF হাব (Mouza-Best PDF Generator)</span>
+                    <span className="text-[10px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">
+                      প্রতিটি মৌজার পৃথক টেবিল · ০% মিসিং রেকর্ড
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    যেকোনো একক মৌজা অথবা সমগ্র উপজেলার সকল মৌজার পৃথক টেবিল সংবলিত A4 Landscape PDF রিপোর্ট ১-ক্লিকে তৈরি করুন।
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>উপজেলা ও মৌজাভিত্তিক A4 লেজার PDF ডাউনলোড সেন্টার</span>
-                  <span className="text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded">
-                    সকল রেকর্ড অন্তর্ভুক্ত · নো মিসিং
+
+              {/* Upazila + Mouza Selectors + Master Print Button */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                  <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                  <select
+                    value={printUpazilaScope}
+                    onChange={(e) => {
+                      setPrintUpazilaScope(e.target.value);
+                      setPrintMouzaScope('');
+                    }}
+                    className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#121827] text-slate-200">
+                      সকল উপজেলা ({toBengaliNumber(records.length)} রেকর্ড)
+                    </option>
+                    {availableUpazilas.map((u) => (
+                      <option key={u} value={u} className="bg-[#121827] text-slate-200">
+                        {u} উপজেলা ({toBengaliNumber(records.filter((r) => r.upazila === u).length)} রেকর্ড)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                  <select
+                    value={printMouzaScope}
+                    onChange={(e) => setPrintMouzaScope(e.target.value)}
+                    className="bg-transparent text-emerald-300 font-semibold focus:outline-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#121827] text-slate-200">
+                      সকল মৌজা (পৃথক টেবিলে)
+                    </option>
+                    {availableMouzasForScope.map((m) => (
+                      <option key={m} value={m} className="bg-[#121827] text-slate-200">
+                        মৌজা: {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => handleTriggerQuickPdf(printUpazilaScope, printMouzaScope)}
+                  className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                  <span>
+                    {printMouzaScope
+                      ? `${printMouzaScope} মৌজার PDF ডাউনলোড`
+                      : 'মৌজাভিত্তিক মাস্টার PDF ডাউনলোড'}
                   </span>
-                </h3>
-                <p className="text-xs text-slate-400">
-                  যেকোনো উপজেলার সকল রেকর্ড মৌজাভিত্তিক আলাদা টেবিলে বিভক্ত করে প্রফেশনাল A4 ল্যান্ডস্কেপ PDF প্রিন্ট বা সংরক্ষণ করুন।
-                </p>
+                </button>
+
+                <button
+                  onClick={() => setIsApkModalOpen(true)}
+                  className="px-3 py-2 text-xs font-medium text-amber-300 bg-[#1e2a44] hover:bg-[#273757] border border-amber-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                  <span>GitHub ও APK</span>
+                </button>
               </div>
             </div>
 
-            {/* Direct Quick PDF and APK Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                <Building2 className="w-3.5 h-3.5 text-amber-400" />
-                <select
-                  value={printUpazilaScope}
-                  onChange={(e) => setPrintUpazilaScope(e.target.value)}
-                  className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+            {/* Individual Mouza Quick-PDF Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
+              {mouzaCards.map((mc) => (
+                <div
+                  key={`${mc.upazila}_${mc.mouza}`}
+                  className="bg-[#0e1422] border border-slate-800 hover:border-amber-500/40 rounded-lg p-2.5 flex flex-col justify-between gap-2 transition-all"
                 >
-                  <option value="" className="bg-[#121827] text-slate-200">
-                    সকল উপজেলা (মৌজাভিত্তিক আলাদা টেবিল)
-                  </option>
-                  {availableUpazilas.map((u) => (
-                    <option key={u} value={u} className="bg-[#121827] text-slate-200">
-                      {u} উপজেলা ({toBengaliNumber(records.filter((r) => r.upazila === u).length)} রেকর্ড)
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-white truncate">
+                        মৌজা: {mc.mouza}
+                      </span>
+                      <span className="text-[10px] font-mono-num text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                        JL {mc.jlNo}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                      {mc.upazila}, {mc.district}
+                    </div>
+                  </div>
 
-              <button
-                onClick={() => handleTriggerQuickPdf(printUpazilaScope)}
-                className="px-4 py-2 text-xs font-semibold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-[0.98] rounded-lg shadow-md shadow-amber-950/40 flex items-center gap-1.5 transition-all"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                <span>PDF লেজার ডাউনলোড / প্রিন্ট</span>
-              </button>
-
-              <button
-                onClick={() => setIsApkModalOpen(true)}
-                className="px-3.5 py-2 text-xs font-medium text-amber-300 bg-[#1e2a44] hover:bg-[#273757] border border-amber-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
-              >
-                <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                <span>অ্যান্ড্রয়েড APK (.apk)</span>
-              </button>
+                  <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1 border-t border-slate-800/80">
+                    <span className="font-mono-num">
+                      {toBengaliNumber(mc.count)} টি রেকর্ড · {toBengaliNumber(mc.totalAcre.toFixed(2))} একর
+                    </span>
+                    <button
+                      onClick={() => handleTriggerQuickPdf(mc.upazila, mc.mouza)}
+                      className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 font-semibold rounded text-[10px] flex items-center gap-1 transition-colors"
+                    >
+                      <Printer className="w-2.5 h-2.5" />
+                      <span>PDF</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -448,7 +685,7 @@ export default function App() {
             />
           ) : (
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-h-[600px]">
-              {/* Left Side: Administrative Hierarchy Explorer (3 columns on lg) */}
+              {/* Left Side: Administrative Hierarchy Explorer */}
               <div className="lg:col-span-3 h-[680px]">
                 <HierarchyExplorer
                   records={records}
@@ -460,7 +697,7 @@ export default function App() {
                 />
               </div>
 
-              {/* Right Side: Interactive Dynamic Schema Inventory Grid (9 columns on lg) */}
+              {/* Right Side: Interactive Dynamic Schema Inventory Grid */}
               <div className="lg:col-span-9 h-[680px] flex flex-col">
                 <InventoryGrid
                   records={filteredRecords}
@@ -486,11 +723,12 @@ export default function App() {
         </main>
       )}
 
-      {/* Ingestion Engine Modal (Folder + ZIP) */}
+      {/* Ingestion Engine Modal (Folder + Phone Memory + ZIP) */}
       <IngestionModal
         isOpen={isIngestOpen}
         onClose={() => setIsIngestOpen(false)}
         onIngestionComplete={handleIngestionComplete}
+        onOpenPrintAfterIngest={() => handleTriggerQuickPdf('', '')}
       />
 
       {/* Dynamic Column Customizer Modal */}
@@ -510,7 +748,7 @@ export default function App() {
         isNew={isNewRecord}
       />
 
-      {/* Android APK Download Modal */}
+      {/* Android APK & GitHub Repository Sync Modal */}
       <ApkDownloadModal
         isOpen={isApkModalOpen}
         onClose={() => setIsApkModalOpen(false)}
