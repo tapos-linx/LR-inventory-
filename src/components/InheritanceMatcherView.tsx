@@ -12,18 +12,28 @@ import {
   Layers,
   UserCheck,
   FileText,
+  FileJson,
   Loader2,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
 import {
   PROVIDED_WARISH_CERTIFICATES,
   REFERENCE_INHERITANCE_FILE_PATH,
+  WarishCertificate,
   matchLandRecordsWithInheritance,
   convertMatchedListToLandRecords,
 } from '../utils/inheritanceData';
 import { toBengaliNumber, parseAcreValue } from '../utils/bengaliNumerals';
-import { exportToExcel } from '../utils/exportUtils';
-import { downloadMatchedInheritancePdf } from '../utils/pdfDownloadEngine';
+import {
+  exportToCSV,
+  exportToExcel,
+  exportToJSON,
+  exportWarishCertificatesToExcel,
+} from '../utils/exportUtils';
+import {
+  downloadForensicReportTablePdf,
+  downloadMatchedInheritancePdf,
+} from '../utils/pdfDownloadEngine';
 
 interface InheritanceMatcherViewProps {
   records: LandRecord[];
@@ -149,6 +159,88 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
     exportToExcel(enriched, exportCols, 'LR_Warish_Matched_New_List');
   };
 
+  const handleExportMatchedCsv = () => {
+    const enriched = buildEnrichedRecords();
+    const extraKeys = [
+      'ওয়ারিশ সনদ নং',
+      'মৃত পূর্বসূরি',
+      'জীবিত ওয়ারিশ সংখ্যা',
+      'ওয়ারিশ প্রতি গড় অংশ',
+    ];
+    const exportCols: DynamicColumn[] = [
+      ...columns,
+      ...extraKeys
+        .filter((k) => !columns.some((c) => c.id === k))
+        .map((k, idx) => ({
+          id: k,
+          label: k,
+          visible: true,
+          order: columns.length + idx + 1,
+          type: 'text' as const,
+          isExtra: true,
+        })),
+    ];
+    exportToCSV(enriched, exportCols, 'LR_Warish_Matched_New_List');
+  };
+
+  const handleExportMatchedJson = () => {
+    exportToJSON(
+      {
+        generatedAt: new Date().toISOString(),
+        totalMatchedRecords: filteredMatchedList.length,
+        matchedItems: filteredMatchedList,
+      },
+      'LR_Warish_Matched_New_List'
+    );
+  };
+
+  const handleDownloadWarishDirectoryPdf = async (singleCert?: WarishCertificate) => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      const targetCerts = singleCert ? [singleCert] : PROVIDED_WARISH_CERTIFICATES;
+      const rows: Record<string, string>[] = [];
+      targetCerts.forEach((cert) => {
+        cert.heirs.forEach((h) => {
+          rows.push({
+            certNo: `সনদ #${toBengaliNumber(cert.slNo)} (${cert.certificateNo})`,
+            issueDate: cert.issueDate,
+            deceased: `${cert.deceasedName} (পিতা: ${cert.fatherName}, মাতা: ${cert.motherName})`,
+            village: `${cert.village}, ${cert.union}, ${cert.upazila}`,
+            heirSl: h.sl,
+            heirName: h.name,
+            relation: h.relation,
+            dobStatus: `${h.dob} (${h.status})`,
+          });
+        });
+      });
+
+      await downloadForensicReportTablePdf({
+        reportTitle: singleCert
+          ? `ওয়ারিশ সনদ নং ${singleCert.certificateNo} — মৃত: ${singleCert.deceasedName}`
+          : 'প্রদত্ত ৬টি ওয়ারিশ সনদ ও ৪৯ জন ওয়ারিশের মাস্টার ডিরেক্টরি (Warish Certificates Directory)',
+        reportSubtitle:
+          'গ্রাম/মৌজা: গোয়ালী, ওয়ার্ড ০৮, কাইতলা (দক্ষিণ), নবীনগর, ব্রাহ্মণবাড়িয়া',
+        headers: [
+          { key: 'certNo', label: 'সনদ নং ও ক্রমিক', width: 200 },
+          { key: 'issueDate', label: 'ইস্যু তারিখ', width: 120 },
+          { key: 'deceased', label: 'মৃত পূর্বপুরুষ (পিতা ও মাতা)', width: 280 },
+          { key: 'village', label: 'গ্রাম/মৌজা ও ঠিকানা', width: 220 },
+          { key: 'heirSl', label: 'ওয়ারিশ ক্রমিক', width: 100 },
+          { key: 'heirName', label: 'ওয়ারিশের নাম', width: 210 },
+          { key: 'relation', label: 'সম্পর্ক', width: 140 },
+          { key: 'dobStatus', label: 'জন্ম তারিখ ও অবস্থা', width: 190 },
+        ],
+        rows,
+        fileNamePrefix: singleCert
+          ? `Warish_Certificate_${singleCert.slNo}`
+          : 'LR_All_6_Warish_Certificates_Directory',
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handleDownloadDirectPdf = async () => {
     if (filteredMatchedList.length === 0 || isDownloadingPdf) return;
     setIsDownloadingPdf(true);
@@ -243,9 +335,28 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
             <button
               onClick={handleExportMatchedExcel}
               className="px-3 py-2 text-xs font-semibold text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/30 rounded-lg flex items-center gap-1.5 transition-colors"
+              title="ম্যাচকৃত নতুন তালিকা Excel (.xlsx) হিসেবে লোকাল ডিস্কে সেভ করুন"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>এক্সেল (.xlsx)</span>
+            </button>
+
+            <button
+              onClick={handleExportMatchedCsv}
+              className="px-3 py-2 text-xs font-semibold text-sky-300 bg-sky-950/40 hover:bg-sky-950/70 border border-sky-500/30 rounded-lg flex items-center gap-1.5 transition-colors"
+              title="ম্যাচকৃত নতুন তালিকা CSV (.csv) হিসেবে লোকাল ডিস্কে সেভ করুন"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span>CSV (.csv)</span>
+            </button>
+
+            <button
+              onClick={handleExportMatchedJson}
+              className="px-3 py-2 text-xs font-semibold text-purple-300 bg-purple-950/40 hover:bg-purple-950/70 border border-purple-500/30 rounded-lg flex items-center gap-1.5 transition-colors"
+              title="ম্যাচকৃত নতুন তালিকা JSON (.json) হিসেবে লোকাল ডিস্কে সেভ করুন"
+            >
+              <FileJson className="w-3.5 h-3.5 text-purple-400" />
+              <span>JSON (.json)</span>
             </button>
 
             <button
@@ -289,14 +400,49 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => handleDownloadWarishDirectoryPdf()}
+                disabled={isDownloadingPdf}
+                className="px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[11px] flex items-center gap-1 shadow transition-colors"
+                title="৬টি ওয়ারিশ সনদ ও ৪৯ জন ওয়ারিশের তালিকা PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>৬টি সনদ তালিকা PDF (.pdf)</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  exportWarishCertificatesToExcel(
+                    PROVIDED_WARISH_CERTIFICATES,
+                    'LR_All_6_Warish_Certificates'
+                  )
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                title="৬টি ওয়ারিশ সনদ Excel হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>৬টি সনদ Excel (.xlsx)</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  exportToJSON(PROVIDED_WARISH_CERTIFICATES, 'LR_All_6_Warish_Certificates')
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/40 text-purple-300 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                title="৬টি ওয়ারিশ সনদ JSON হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <FileJson className="w-3.5 h-3.5 text-purple-400" />
+                <span>JSON</span>
+              </button>
+
               <a
                 href={REFERENCE_INHERITANCE_FILE_PATH}
                 download="ওয়ারিশ_সনদের_তালিকা.txt"
                 className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] text-amber-300 flex items-center gap-1.5 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>রেফারেন্স .txt ডাউনলোড</span>
+                <span>রেফারেন্স .txt সেভ</span>
               </a>
               {selectedCertId !== 'all' && (
                 <button
@@ -346,13 +492,34 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] gap-1">
                     <span className="text-emerald-400 font-semibold">
                       ওয়ারিশ: {toBengaliNumber(cert.heirs.length)} জন
                     </span>
-                    <span className="bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded text-[10px]">
-                      ম্যাচ: {toBengaliNumber(matchCountForCert)} টি
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded text-[10px]">
+                        ম্যাচ: {toBengaliNumber(matchCountForCert)}
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadWarishDirectoryPdf(cert);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            handleDownloadWarishDirectoryPdf(cert);
+                          }
+                        }}
+                        className="px-1.5 py-0.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-0.5"
+                        title="এই একক ওয়ারিশ সনদটি PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+                      >
+                        <Download className="w-2.5 h-2.5" />
+                        <span>PDF</span>
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -506,7 +673,7 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
                     সনদভুক্ত ওয়ারিশগণের নামের তালিকা (ক্রমিক, সম্পর্ক ও জন্ম তারিখসহ)
                   </th>
                   <th className="py-2.5 px-3 text-center">
-                    ম্যাচিং স্ট্যাটাস
+                    ম্যাচিং স্ট্যাটাস ও ডাউনলোড
                   </th>
                 </tr>
               </thead>
@@ -605,7 +772,7 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
                         </div>
                       </td>
 
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-3 text-center space-y-1.5">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border ${
                             isDirect
@@ -616,8 +783,36 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
                           <UserCheck className="w-3 h-3" />
                           <span>{isDirect ? 'সরাসরি নাম ও বংশক্রম ম্যাচ' : 'মৌজা/বংশক্রম সমন্বিত'}</span>
                         </span>
-                        <div className="text-[10px] text-slate-400 print:text-black mt-1">
+                        <div className="text-[10px] text-slate-400 print:text-black">
                           {item.matchedPersonName}
+                        </div>
+                        <div className="no-print flex items-center justify-center gap-1 pt-1">
+                          <button
+                            onClick={() =>
+                              downloadMatchedInheritancePdf(
+                                [item],
+                                `Warish_Matched_Kh_${rec.khatianNo}_Dag_${rec.dagNo}`
+                              )
+                            }
+                            className="px-2 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-1 shadow transition-colors"
+                            title="এই একক ওয়ারিশ-খতিয়ান রেকর্ডটি PDF হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                          >
+                            <Download className="w-2.5 h-2.5" />
+                            <span>Download .PDF</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              exportToJSON(
+                                item,
+                                `Warish_Matched_Kh_${rec.khatianNo}_Dag_${rec.dagNo}`
+                              )
+                            }
+                            className="px-1.5 py-1 bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/40 text-purple-300 font-semibold rounded text-[10px] inline-flex items-center gap-0.5 transition-colors"
+                            title="এই একক ওয়ারিশ-খতিয়ান রেকর্ডটি JSON হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                          >
+                            <FileJson className="w-2.5 h-2.5" />
+                            <span>.JSON</span>
+                          </button>
                         </div>
                       </td>
                     </tr>

@@ -32,6 +32,7 @@ import { ArchiveTreeView } from './components/ArchiveTreeView';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
 import { InheritanceMatcherView } from './components/InheritanceMatcherView';
 import { ForensicAuditView } from './components/ForensicAuditView';
+import { LocalDiskDownloadCenter } from './components/LocalDiskDownloadCenter';
 import { REPOSITORY_CONFIG } from './config/repository';
 import { LedgerAuditVersionEntry } from './types/forensic';
 import {
@@ -39,7 +40,10 @@ import {
   matchLandRecordsWithInheritance,
   convertMatchedListToLandRecords,
 } from './utils/inheritanceData';
-import { downloadMatchedInheritancePdf } from './utils/pdfDownloadEngine';
+import {
+  downloadMatchedInheritancePdf,
+  downloadMouzaLandRecordsPdf,
+} from './utils/pdfDownloadEngine';
 import {
   DynamicColumn,
   IngestedArchiveNode,
@@ -96,7 +100,16 @@ export default function App() {
   >('ledger');
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
   const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
-  const [versionHistory, setVersionHistory] = useState<LedgerAuditVersionEntry[]>([]);
+  const [versionHistory, setVersionHistory] = useState<LedgerAuditVersionEntry[]>(() => [
+    {
+      versionId: 'VER-INIT-001',
+      timestamp: 'প্রাথমিক মাস্টার লেজার বেসলাইন',
+      actionTitle: 'প্রাথমিক যাচাইকৃত মাস্টার লেজার স্ন্যাপশট (Initial Baseline Snapshot — CS/SA/RS/BS)',
+      proposalId: 'PROP-BASELINE-INIT',
+      evidenceIds: ['EVD-CS-303', 'EVD-SA-752', 'EVD-RS-905', 'EVD-BS-2905'],
+      previousRecordsSnapshot: INITIAL_MOCK_RECORDS,
+    },
+  ]);
 
   // Quick Home Upload Status
   const [isQuickUploading, setIsQuickUploading] = useState(false);
@@ -373,6 +386,27 @@ export default function App() {
     setPrintUpazilaScope(upazila || '');
     setPrintMouzaScope(mouza || '');
     setActiveView('print');
+  };
+
+  // Direct 1-Click Local Disk .PDF Save for any Mouza or Upazila Scope
+  const handleDirectSaveMouzaPdfToDisk = async (upazila?: string, mouza?: string) => {
+    setIsQuickUploading(true);
+    const scopeName = mouza || upazila || 'All_Mouzas';
+    setQuickUploadMsg(`${scopeName}-এর খতিয়ান ও দাগ রেজিস্টার .PDF ফাইল লোকাল ডিস্কে সেভ হচ্ছে...`);
+    try {
+      const target = records.filter((r) => {
+        if (upazila && r.upazila !== upazila) return false;
+        if (mouza && r.mouza !== mouza) return false;
+        return true;
+      });
+      await downloadMouzaLandRecordsPdf(target, columns, scopeName);
+      setQuickUploadMsg(
+        `সফলভাবে "${scopeName}" (${toBengaliNumber(target.length)} টি রেকর্ড)-এর .PDF ফাইল লোকাল ডিস্কে সেভ হয়েছে!`
+      );
+      setTimeout(() => setQuickUploadMsg(null), 7000);
+    } finally {
+      setIsQuickUploading(false);
+    }
   };
 
   const handleResetToSample = () => {
@@ -757,6 +791,14 @@ export default function App() {
             </div>
           </section>
 
+          {/* Unified Local Disk Document Save Hub for All 6 Document Categories */}
+          <LocalDiskDownloadCenter
+            records={records}
+            filteredRecords={filteredRecords}
+            columns={columns}
+            archiveTree={archiveTree}
+          />
+
           {/* Mouza-Best PDF Implementation Hub (মৌজাভিত্তিক মাস্টার PDF হাব) */}
           <section className="bg-[#121827] border border-amber-500/30 rounded-xl p-4 shadow-lg space-y-3 font-bengali">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -772,12 +814,12 @@ export default function App() {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    যেকোনো একক মৌজা অথবা সমগ্র উপজেলার সকল মৌজার পৃথক টেবিল সংবলিত A4 Landscape PDF রিপোর্ট ১-ক্লিকে তৈরি করুন।
+                    যেকোনো একক মৌজা অথবা সমগ্র উপজেলার সকল মৌজার পৃথক টেবিল সংবলিত A4 Landscape PDF রিপোর্ট সরাসরি লোকাল ডিস্কে সেভ বা প্রিন্ট করুন।
                   </p>
                 </div>
               </div>
 
-              {/* Upazila + Mouza Selectors + Master Print Button */}
+              {/* Upazila + Mouza Selectors + Direct Local Disk Save & Print Buttons */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
                   <Building2 className="w-3.5 h-3.5 text-amber-400" />
@@ -819,15 +861,26 @@ export default function App() {
                 </div>
 
                 <button
-                  onClick={() => handleTriggerQuickPdf(printUpazilaScope, printMouzaScope)}
-                  className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
+                  onClick={() =>
+                    handleDirectSaveMouzaPdfToDisk(printUpazilaScope, printMouzaScope)
+                  }
+                  className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
+                  title="সরাসরি লোকাল ডিস্কে .PDF ফাইল হিসেবে সেভ করুন"
                 >
                   <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
                   <span>
                     {printMouzaScope
-                      ? `${printMouzaScope} মৌজার PDF ডাউনলোড`
-                      : 'মৌজাভিত্তিক মাস্টার PDF ডাউনলোড'}
+                      ? `${printMouzaScope} মৌজার .PDF ডিস্কে সেভ`
+                      : 'সরাসরি মৌজা .PDF ডিস্কে সেভ'}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => handleTriggerQuickPdf(printUpazilaScope, printMouzaScope)}
+                  className="px-3.5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                  <span>প্রিন্ট স্টুডিও ভিউ</span>
                 </button>
 
                 <a
@@ -851,41 +904,70 @@ export default function App() {
               </div>
             </div>
 
-            {/* Individual Mouza Quick-PDF Cards */}
+            {/* Individual Mouza Quick-PDF & Local Disk Save Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
-              {mouzaCards.map((mc) => (
-                <div
-                  key={`${mc.upazila}_${mc.mouza}`}
-                  className="bg-[#0e1422] border border-slate-800 hover:border-amber-500/40 rounded-lg p-2.5 flex flex-col justify-between gap-2 transition-all"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-bold text-white truncate">
-                        মৌজা: {mc.mouza}
-                      </span>
-                      <span className="text-[10px] font-mono-num text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
-                        JL {mc.jlNo}
-                      </span>
+              {mouzaCards.map((mc) => {
+                const mouzaSpecificRecords = records.filter(
+                  (r) => r.upazila === mc.upazila && r.mouza === mc.mouza
+                );
+                return (
+                  <div
+                    key={`${mc.upazila}_${mc.mouza}`}
+                    className="bg-[#0e1422] border border-slate-800 hover:border-amber-500/40 rounded-lg p-2.5 flex flex-col justify-between gap-2 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-white truncate">
+                          মৌজা: {mc.mouza}
+                        </span>
+                        <span className="text-[10px] font-mono-num text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                          JL {mc.jlNo}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                        {mc.upazila}, {mc.district}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                      {mc.upazila}, {mc.district}
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1 border-t border-slate-800/80">
-                    <span className="font-mono-num">
-                      {toBengaliNumber(mc.count)} টি রেকর্ড · {toBengaliNumber(mc.totalAcre.toFixed(2))} একর
-                    </span>
-                    <button
-                      onClick={() => handleTriggerQuickPdf(mc.upazila, mc.mouza)}
-                      className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 font-semibold rounded text-[10px] flex items-center gap-1 transition-colors"
-                    >
-                      <Printer className="w-2.5 h-2.5" />
-                      <span>PDF</span>
-                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-300 pt-1.5 border-t border-slate-800/80">
+                      <span className="font-mono-num text-[10px]">
+                        {toBengaliNumber(mc.count)} রেকর্ড · {toBengaliNumber(mc.totalAcre.toFixed(2))} একর
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDirectSaveMouzaPdfToDisk(mc.upazila, mc.mouza)}
+                          className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-[10px] flex items-center gap-0.5 transition-colors"
+                          title="এই মৌজার PDF সরাসরি লোকাল ডিস্কে সেভ করুন"
+                        >
+                          <Download className="w-2.5 h-2.5" />
+                          <span>.PDF</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            exportToExcel(
+                              mouzaSpecificRecords,
+                              columns,
+                              `LR_Mouza_${mc.mouza}`
+                            )
+                          }
+                          className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold rounded text-[10px] flex items-center gap-0.5 transition-colors"
+                          title="এই মৌজার Excel সরাসরি লোকাল ডিস্কে সেভ করুন"
+                        >
+                          <FileSpreadsheet className="w-2.5 h-2.5" />
+                          <span>.XLSX</span>
+                        </button>
+                        <button
+                          onClick={() => handleTriggerQuickPdf(mc.upazila, mc.mouza)}
+                          className="px-1.5 py-0.5 bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 font-semibold rounded text-[10px] flex items-center gap-0.5 transition-colors"
+                          title="প্রিন্ট ভিউ ওপেন করুন"
+                        >
+                          <Printer className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 

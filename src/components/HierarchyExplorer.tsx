@@ -4,16 +4,15 @@ import {
   ChevronDown,
   MapPin,
   Building2,
-  FileText,
   Search,
-  CheckSquare,
-  Square,
-  Folder,
   Layers,
-  Filter,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { LandRecord } from '../types/landRecord';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
+import { DEFAULT_COLUMNS } from '../utils/mockData';
+import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface HierarchyExplorerProps {
   records: LandRecord[];
@@ -52,6 +51,7 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
   onClearFilter,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [downloadingScope, setDownloadingScope] = useState<string | null>(null);
   const [expandedDistricts, setExpandedDistricts] = useState<Record<string, boolean>>({
     কুমিল্লা: true,
     ব্রাহ্মণবাড়িয়া: true,
@@ -60,6 +60,28 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
     'কুমিল্লা_আদর্শ সদর': true,
     'ব্রাহ্মণবাড়িয়া_ব্রাহ্মণবাড়িয়া সদর': true,
   });
+
+  const handleDownloadHierarchyNodePdf = async (
+    dist: string,
+    upz: string,
+    mouz: string
+  ) => {
+    const scopeKey = `${dist}_${upz}_${mouz}`;
+    if (downloadingScope) return;
+    setDownloadingScope(scopeKey);
+    try {
+      const target = records.filter((r) => {
+        if (dist && r.district !== dist) return false;
+        if (upz && r.upazila !== upz) return false;
+        if (mouz && r.mouza !== mouz) return false;
+        return true;
+      });
+      const label = mouz || upz || dist || 'All_Records';
+      await downloadMouzaLandRecordsPdf(target, DEFAULT_COLUMNS, `Hierarchy_${label}`);
+    } finally {
+      setDownloadingScope(null);
+    }
+  };
 
   // Build hierarchical map from current records
   const hierarchy = new Map<string, DistrictNode>();
@@ -141,22 +163,40 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
       {/* Tree Content */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1 text-xs">
         {/* All Records Node */}
-        <button
-          onClick={onClearFilter}
+        <div
           className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-bengali ${
             !isFiltering
               ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 font-medium'
               : 'text-slate-300 hover:bg-slate-800/60'
           }`}
         >
-          <div className="flex items-center gap-2">
+          <button
+            onClick={onClearFilter}
+            className="flex items-center gap-2 flex-1 text-left"
+          >
             <Layers className="w-3.5 h-3.5 text-amber-400" />
             <span>সকল রেকর্ড (সার্বিক ভিউ)</span>
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono-num bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
+              {toBengaliNumber(records.length)}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleDownloadHierarchyNodePdf('', '', '')}
+              disabled={downloadingScope === '__'}
+              className="px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold flex items-center gap-0.5"
+              title="সকল রেকর্ডের PDF সরাসরি লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              {downloadingScope === '__' ? (
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Download className="w-2.5 h-2.5" />
+              )}
+              <span>PDF</span>
+            </button>
           </div>
-          <span className="text-[10px] font-mono-num bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
-            {toBengaliNumber(records.length)}
-          </span>
-        </button>
+        </div>
 
         {Array.from(hierarchy.entries()).map(([distName, distNode]) => {
           if (
@@ -171,6 +211,7 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
 
           const isDistExpanded = expandedDistricts[distName] ?? true;
           const isDistSelected = selectedDistrict === distName && !selectedUpazila;
+          const distScopeKey = `${distName}__`;
 
           return (
             <div key={distName} className="space-y-0.5">
@@ -201,9 +242,25 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                     জেলা: {distName}
                   </button>
                 </div>
-                <span className="text-[10px] font-mono-num text-slate-400 ml-2">
-                  {toBengaliNumber(distNode.count)}
-                </span>
+                <div className="flex items-center gap-1 ml-2 shrink-0">
+                  <span className="text-[10px] font-mono-num text-slate-400">
+                    {toBengaliNumber(distNode.count)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadHierarchyNodePdf(distName, '', '')}
+                    disabled={downloadingScope === distScopeKey}
+                    className="px-1.5 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-0.5"
+                    title={`${distName} জেলার সকল রেকর্ডের PDF লোকাল ডিস্কে ডাউনলোড করুন`}
+                  >
+                    {downloadingScope === distScopeKey ? (
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    ) : (
+                      <Download className="w-2.5 h-2.5" />
+                    )}
+                    <span>PDF</span>
+                  </button>
+                </div>
               </div>
 
               {/* Upazilas Under District */}
@@ -216,6 +273,7 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                       selectedDistrict === distName &&
                       selectedUpazila === upzName &&
                       !selectedMouza;
+                    const upzScopeKey = `${distName}_${upzName}_`;
 
                     return (
                       <div key={upzName} className="space-y-0.5">
@@ -246,9 +304,25 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                               উপজেলা: {upzName}
                             </button>
                           </div>
-                          <span className="text-[10px] font-mono-num text-slate-500 ml-1">
-                            {toBengaliNumber(upzNode.count)}
-                          </span>
+                          <div className="flex items-center gap-1 ml-1 shrink-0">
+                            <span className="text-[10px] font-mono-num text-slate-500">
+                              {toBengaliNumber(upzNode.count)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadHierarchyNodePdf(distName, upzName, '')}
+                              disabled={downloadingScope === upzScopeKey}
+                              className="px-1 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-0.5"
+                              title={`${upzName} উপজেলার সকল রেকর্ডের PDF লোকাল ডিস্কে ডাউনলোড করুন`}
+                            >
+                              {downloadingScope === upzScopeKey ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              ) : (
+                                <Download className="w-2.5 h-2.5" />
+                              )}
+                              <span>PDF</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Mouzas Under Upazila */}
@@ -259,18 +333,21 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                                 selectedDistrict === distName &&
                                 selectedUpazila === upzName &&
                                 selectedMouza === mouzName;
+                              const mouzScopeKey = `${distName}_${upzName}_${mouzName}`;
 
                               return (
-                                <button
+                                <div
                                   key={mouzName}
-                                  onClick={() => onSelectNode(distName, upzName, mouzName)}
                                   className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors font-bengali text-[11px] ${
                                     isMouzSelected
                                       ? 'bg-amber-400/20 text-amber-200 border-l-2 border-amber-400 font-medium'
                                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-1.5 truncate">
+                                  <button
+                                    onClick={() => onSelectNode(distName, upzName, mouzName)}
+                                    className="flex items-center gap-1.5 truncate flex-1 text-left"
+                                  >
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 shrink-0" />
                                     <span className="truncate">
                                       {mouzName}
@@ -280,11 +357,29 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                                         </span>
                                       )}
                                     </span>
+                                  </button>
+                                  <div className="flex items-center gap-1 ml-1 shrink-0">
+                                    <span className="text-[10px] font-mono-num text-slate-400">
+                                      {toBengaliNumber(mouzNode.count)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleDownloadHierarchyNodePdf(distName, upzName, mouzName)
+                                      }
+                                      disabled={downloadingScope === mouzScopeKey}
+                                      className="px-1 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 text-[9px] font-bold flex items-center gap-0.5"
+                                      title={`${mouzName} মৌজার PDF লোকাল ডিস্কে ডাউনলোড করুন`}
+                                    >
+                                      {downloadingScope === mouzScopeKey ? (
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                      ) : (
+                                        <Download className="w-2.5 h-2.5" />
+                                      )}
+                                      <span>PDF</span>
+                                    </button>
                                   </div>
-                                  <span className="text-[10px] font-mono-num text-slate-400 ml-1">
-                                    {toBengaliNumber(mouzNode.count)}
-                                  </span>
-                                </button>
+                                </div>
                               );
                             })}
                           </div>

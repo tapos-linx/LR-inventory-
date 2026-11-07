@@ -2,18 +2,18 @@ import React, { useState } from 'react';
 import {
   X,
   FileText,
-  MapPin,
-  Building,
-  User,
-  PieChart,
-  FileCheck,
   Save,
-  CheckCircle,
   Plus,
   Trash2,
+  Download,
+  FileSpreadsheet,
+  FileJson,
+  Loader2,
 } from 'lucide-react';
 import { LandRecord } from '../types/landRecord';
-import { toBengaliNumber } from '../utils/bengaliNumerals';
+import { DEFAULT_COLUMNS } from '../utils/mockData';
+import { exportToExcel, exportToJSON } from '../utils/exportUtils';
+import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface RecordDetailModalProps {
   record: LandRecord | null;
@@ -35,6 +35,36 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const [formData, setFormData] = useState<LandRecord>({ ...record });
   const [extraKey, setExtraKey] = useState('');
   const [extraVal, setExtraVal] = useState('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadSingleRecordPdf = async () => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      await downloadMouzaLandRecordsPdf(
+        [formData],
+        DEFAULT_COLUMNS,
+        `Record_Mouza_${formData.mouza}_Khatian_${formData.khatianNo}_Dag_${formData.dagNo}`
+      );
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadSingleRecordExcel = () => {
+    exportToExcel(
+      [formData],
+      DEFAULT_COLUMNS,
+      `Record_Mouza_${formData.mouza}_Khatian_${formData.khatianNo}_Dag_${formData.dagNo}`
+    );
+  };
+
+  const handleDownloadSingleRecordJson = () => {
+    exportToJSON(
+      formData,
+      `Record_Mouza_${formData.mouza}_Khatian_${formData.khatianNo}_Dag_${formData.dagNo}`
+    );
+  };
 
   const handleChange = (field: keyof LandRecord, val: any) => {
     setFormData((prev) => ({ ...prev, [field]: val }));
@@ -76,7 +106,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-[#121827] border border-amber-500/30 rounded-xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#161f32]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-b border-slate-800 bg-[#161f32]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
               <FileText className="w-4 h-4" />
@@ -86,16 +116,51 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 {isNew ? 'নতুন খতিয়ান ও দাগ রেকর্ড অন্তর্ভুক্তি' : 'খতিয়ান ও দাগ রেকর্ড বিশদ বিবরণ'}
               </h2>
               <p className="text-xs text-slate-400 font-bengali">
-                খতিয়ান নং: {formData.khatianNo || 'নতুন'} · দাগ নং: {formData.dagNo || 'নতুন'}
+                মৌজা: {formData.mouza} · খতিয়ান নং: {formData.khatianNo || 'নতুন'} · দাগ নং: {formData.dagNo || 'নতুন'}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-1.5 font-bengali">
+            <button
+              type="button"
+              onClick={handleDownloadSingleRecordPdf}
+              disabled={isDownloadingPdf}
+              className="px-2.5 py-1 text-[11px] font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg flex items-center gap-1 shadow transition-colors"
+              title="এই একক খতিয়ান ও দাগ রেকর্ডটি PDF হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>Download .PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadSingleRecordExcel}
+              className="px-2 py-1 text-[11px] font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 rounded-lg flex items-center gap-1 transition-colors"
+              title="এই একক রেকর্ডটি Excel (.xlsx) হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              <FileSpreadsheet className="w-3 h-3" />
+              <span>.XLSX</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadSingleRecordJson}
+              className="px-2 py-1 text-[11px] font-semibold text-purple-300 bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/40 rounded-lg flex items-center gap-1 transition-colors"
+              title="এই একক রেকর্ডটি JSON (.json) হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              <FileJson className="w-3 h-3" />
+              <span>.JSON</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Form */}
@@ -297,7 +362,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           )}
 
           {/* Form Actions */}
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 cursor-pointer text-slate-300">
                 <input
@@ -309,7 +374,20 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 <span>যাচাইকৃত রেকর্ড (Verified)</span>
               </label>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadSingleRecordPdf}
+                disabled={isDownloadingPdf}
+                className="px-3.5 py-1.5 text-xs font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors flex items-center gap-1.5 shadow"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span>লোকাল ডিস্কে সেভ (.pdf)</span>
+              </button>
               <button
                 type="button"
                 onClick={onClose}

@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   CheckSquare,
   FileText,
+  FileJson,
   Loader2,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
@@ -17,8 +18,16 @@ import {
   parseAcreValue,
   toBengaliNumber,
 } from '../utils/bengaliNumerals';
-import { exportToExcel } from '../utils/exportUtils';
-import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
+import {
+  exportGenericTableToExcel,
+  exportToCSV,
+  exportToExcel,
+  exportToJSON,
+} from '../utils/exportUtils';
+import {
+  downloadForensicReportTablePdf,
+  downloadMouzaLandRecordsPdf,
+} from '../utils/pdfDownloadEngine';
 
 interface PrintReportViewProps {
   records: LandRecord[];
@@ -128,6 +137,88 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+
+  const handleDirectDownloadSingleMouzaPdf = async (
+    mouzaRecords: LandRecord[],
+    mouzaName: string
+  ) => {
+    if (mouzaRecords.length === 0 || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      await downloadMouzaLandRecordsPdf(mouzaRecords, columns, `Mouza_${mouzaName}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleDownloadMouzaSummaryIndexPdf = async () => {
+    if (mouzaSummaries.length === 0 || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      await downloadForensicReportTablePdf({
+        reportTitle: 'মৌজাভিত্তিক সারসংক্ষেপ সূচিপত্র (Mouza-wise Master Summary Index)',
+        reportSubtitle: `সর্বমোট মৌজা: ${toBengaliNumber(mouzaSummaries.length)} টি | সর্বমোট রেকর্ড: ${toBengaliNumber(grandTotalRecords)} টি`,
+        headers: [
+          { key: 'sl', label: 'ক্রমিক', width: 80 },
+          { key: 'district', label: 'জেলা', width: 150 },
+          { key: 'upazila', label: 'উপজেলা/থানা', width: 170 },
+          { key: 'mouza', label: 'মৌজার নাম', width: 180 },
+          { key: 'jlNo', label: 'জে.এল. নং', width: 100 },
+          { key: 'surveys', label: 'জরিপসমূহ', width: 150 },
+          { key: 'khatians', label: 'মোট খতিয়ান', width: 120 },
+          { key: 'dags', label: 'মোট দাগ', width: 120 },
+          { key: 'records', label: 'রেকর্ড সংখ্যা', width: 130 },
+          { key: 'area', label: 'মৌজার মোট জমির পরিমাণ', width: 220 },
+        ],
+        rows: mouzaSummaries.map((ms, idx) => ({
+          sl: toBengaliNumber(idx + 1),
+          district: ms.district,
+          upazila: ms.upazila,
+          mouza: ms.mouza,
+          jlNo: ms.jlNo,
+          surveys: ms.surveys,
+          khatians: toBengaliNumber(ms.uniqueKhatians),
+          dags: toBengaliNumber(ms.uniqueDags),
+          records: toBengaliNumber(ms.recordCount),
+          area: formatAreaBengali(ms.totalAcre),
+        })),
+        fileNamePrefix: 'LR_Mouza_Master_Summary_Index',
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleDownloadMouzaSummaryIndexExcel = () => {
+    exportGenericTableToExcel(
+      [
+        { key: 'sl', label: 'ক্রমিক' },
+        { key: 'district', label: 'জেলা' },
+        { key: 'upazila', label: 'উপজেলা/থানা' },
+        { key: 'mouza', label: 'মৌজার নাম' },
+        { key: 'jlNo', label: 'জে.এল. নং' },
+        { key: 'surveys', label: 'জরিপসমূহ' },
+        { key: 'khatians', label: 'মোট খতিয়ান' },
+        { key: 'dags', label: 'মোট দাগ' },
+        { key: 'records', label: 'রেকর্ড সংখ্যা' },
+        { key: 'area', label: 'মৌজার মোট জমির পরিমাণ' },
+      ],
+      mouzaSummaries.map((ms, idx) => ({
+        sl: toBengaliNumber(idx + 1),
+        district: ms.district,
+        upazila: ms.upazila,
+        mouza: ms.mouza,
+        jlNo: ms.jlNo,
+        surveys: ms.surveys,
+        khatians: toBengaliNumber(ms.uniqueKhatians),
+        dags: toBengaliNumber(ms.uniqueDags),
+        records: toBengaliNumber(ms.recordCount),
+        area: formatAreaBengali(ms.totalAcre),
+      })),
+      'LR_Mouza_Master_Summary_Index',
+      'মৌজা সূচিপত্র'
+    );
   };
 
   const handlePrintSingleMouza = (upz: string, mouz: string) => {
@@ -286,18 +377,48 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                 )
               }
               className="p-2 sm:px-3 sm:py-2 text-xs font-medium text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1.5"
+              title="Excel (.xlsx) হিসেবে লোকাল ডিস্কে সেভ করুন"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">এই মৌজার এক্সেল</span>
+              <span className="hidden sm:inline">Excel (.xlsx)</span>
+            </button>
+
+            <button
+              onClick={() =>
+                exportToCSV(
+                  activeRecords,
+                  columns,
+                  `LR_Mouza_${selectedMouza || selectedUpazila || 'Master'}`
+                )
+              }
+              className="p-2 sm:px-3 sm:py-2 text-xs font-medium text-sky-300 bg-sky-950/40 hover:bg-sky-950/60 border border-sky-500/30 rounded-lg transition-colors flex items-center gap-1.5"
+              title="CSV (.csv) হিসেবে লোকাল ডিস্কে সেভ করুন"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
+
+            <button
+              onClick={() =>
+                exportToJSON(
+                  activeRecords,
+                  `LR_Mouza_${selectedMouza || selectedUpazila || 'Master'}`
+                )
+              }
+              className="p-2 sm:px-3 sm:py-2 text-xs font-medium text-purple-300 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-500/30 rounded-lg transition-colors flex items-center gap-1.5"
+              title="JSON (.json) হিসেবে লোকাল ডিস্কে সেভ করুন"
+            >
+              <FileJson className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">JSON</span>
             </button>
 
             <button
               onClick={handleDownloadHtmlReport}
               className="p-2 sm:px-3 sm:py-2 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors flex items-center gap-1.5"
-              title="অফলাইনে যেকোনো ডিভাইসে প্রিন্ট করার জন্য ডাউনলোড"
+              title="অফলাইনে যেকোনো ডিভাইসে প্রিন্ট করার জন্য HTML ফাইল লোকাল ডিস্কে সেভ করুন"
             >
               <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">ডাউনলোড রিপোর্ট ফাইল</span>
+              <span className="hidden sm:inline">HTML রিপোর্ট সেভ</span>
             </button>
 
             <button
@@ -426,9 +547,26 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
           {/* Mouza-Wise Summary Index Table (মৌজাভিত্তিক সারসংক্ষেপ সূচিপত্র) */}
           {showMouzaSummaryIndex && mouzaSummaries.length > 1 && (
             <div className="mb-8 border border-slate-400 rounded-sm p-3 print:border-none print:p-0">
-              <div className="bg-slate-900 text-white px-3 py-1.5 text-xs font-bold flex items-center justify-between mb-2">
+              <div className="bg-slate-900 text-white px-3 py-1.5 text-xs font-bold flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span>মৌজাভিত্তিক সারসংক্ষেপ সূচিপত্র (Mouza-wise Master Summary Index)</span>
-                <span>মোট মৌজা: {toBengaliNumber(mouzaSummaries.length)} টি</span>
+                <div className="flex items-center gap-2">
+                  <span>মোট মৌজা: {toBengaliNumber(mouzaSummaries.length)} টি</span>
+                  <button
+                    onClick={handleDownloadMouzaSummaryIndexPdf}
+                    disabled={isGeneratingPdf}
+                    className="no-print px-2 py-0.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-1"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>সূচিপত্র .PDF ডাউনলোড</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadMouzaSummaryIndexExcel}
+                    className="no-print px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-1"
+                  >
+                    <FileSpreadsheet className="w-3 h-3" />
+                    <span>সূচিপত্র .XLSX সেভ</span>
+                  </button>
+                </div>
               </div>
               <table className="w-full text-left border-collapse border border-slate-900 text-xs">
                 <thead>
@@ -443,35 +581,59 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                     <th className="p-1.5 text-center">মোট দাগ</th>
                     <th className="p-1.5 text-center">রেকর্ড সংখ্যা</th>
                     <th className="p-1.5 text-right">মৌজার মোট জমির পরিমাণ</th>
-                    <th className="p-1.5 text-center no-print">একক মৌজা PDF</th>
+                    <th className="p-1.5 text-center no-print">লোকাল ডিস্কে সেভ / প্রিন্ট</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300">
-                  {mouzaSummaries.map((ms, idx) => (
-                    <tr key={ms.key} className="divide-x divide-slate-300 hover:bg-amber-50/40">
-                      <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(idx + 1)}</td>
-                      <td className="p-1.5">{ms.district}</td>
-                      <td className="p-1.5 font-medium">{ms.upazila}</td>
-                      <td className="p-1.5 font-bold text-slate-950">{ms.mouza}</td>
-                      <td className="p-1.5 text-center font-mono-num font-bold">{ms.jlNo}</td>
-                      <td className="p-1.5 text-center font-semibold">{ms.surveys}</td>
-                      <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(ms.uniqueKhatians)}</td>
-                      <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(ms.uniqueDags)}</td>
-                      <td className="p-1.5 text-center font-mono-num font-bold">{toBengaliNumber(ms.recordCount)}</td>
-                      <td className="p-1.5 text-right font-mono-num font-semibold">
-                        {formatAreaBengali(ms.totalAcre)}
-                      </td>
-                      <td className="p-1.5 text-center no-print">
-                        <button
-                          onClick={() => handlePrintSingleMouza(ms.upazila, ms.mouza)}
-                          className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-1"
-                        >
-                          <Printer className="w-3 h-3" />
-                          <span>এই মৌজার PDF</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {mouzaSummaries.map((ms, idx) => {
+                    const mRecords = activeRecords.filter(
+                      (r) => r.upazila === ms.upazila && r.mouza === ms.mouza
+                    );
+                    return (
+                      <tr key={ms.key} className="divide-x divide-slate-300 hover:bg-amber-50/40">
+                        <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(idx + 1)}</td>
+                        <td className="p-1.5">{ms.district}</td>
+                        <td className="p-1.5 font-medium">{ms.upazila}</td>
+                        <td className="p-1.5 font-bold text-slate-950">{ms.mouza}</td>
+                        <td className="p-1.5 text-center font-mono-num font-bold">{ms.jlNo}</td>
+                        <td className="p-1.5 text-center font-semibold">{ms.surveys}</td>
+                        <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(ms.uniqueKhatians)}</td>
+                        <td className="p-1.5 text-center font-mono-num">{toBengaliNumber(ms.uniqueDags)}</td>
+                        <td className="p-1.5 text-center font-mono-num font-bold">{toBengaliNumber(ms.recordCount)}</td>
+                        <td className="p-1.5 text-right font-mono-num font-semibold">
+                          {formatAreaBengali(ms.totalAcre)}
+                        </td>
+                        <td className="p-1.5 text-center no-print">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleDirectDownloadSingleMouzaPdf(mRecords, ms.mouza)}
+                              disabled={isGeneratingPdf}
+                              className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-1"
+                              title="এই মৌজার PDF সরাসরি লোকাল ডিস্কে ডাউনলোড করুন"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>.PDF সেভ</span>
+                            </button>
+                            <button
+                              onClick={() => exportToExcel(mRecords, columns, `LR_Mouza_${ms.mouza}`)}
+                              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold rounded text-[10px] inline-flex items-center gap-0.5"
+                              title="এই মৌজার Excel লোকাল ডিস্কে সেভ করুন"
+                            >
+                              <FileSpreadsheet className="w-2.5 h-2.5" />
+                              <span>.XLSX</span>
+                            </button>
+                            <button
+                              onClick={() => handlePrintSingleMouza(ms.upazila, ms.mouza)}
+                              className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-0.5"
+                            >
+                              <Printer className="w-2.5 h-2.5" />
+                              <span>প্রিন্ট</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -529,17 +691,45 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                           </h2>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs font-semibold text-slate-800 bg-white px-2.5 py-0.5 rounded border border-slate-300">
                             উপজেলা: {sample.upazila} · জেলা: {sample.district}
                           </span>
+                          <button
+                            onClick={() =>
+                              handleDirectDownloadSingleMouzaPdf(
+                                mouzaRecords,
+                                sample.mouza || 'Mouza'
+                              )
+                            }
+                            disabled={isGeneratingPdf}
+                            className="no-print px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-xs flex items-center gap-1 shadow-sm"
+                            title="এই মৌজার পৃথক টেবিল সরাসরি .PDF ফাইল হিসেবে লোকাল ডিস্কে সেভ করুন"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>এই মৌজার .PDF ডাউনলোড</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              exportToExcel(
+                                mouzaRecords,
+                                columns,
+                                `LR_Mouza_${sample.mouza || 'Export'}`
+                              )
+                            }
+                            className="no-print px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold rounded text-xs flex items-center gap-1 shadow-sm"
+                            title="এই মৌজার পৃথক টেবিল Excel (.xlsx) হিসেবে লোকাল ডিস্কে সেভ করুন"
+                          >
+                            <FileSpreadsheet className="w-3 h-3" />
+                            <span>এই মৌজার .XLSX</span>
+                          </button>
                           {!selectedMouza && (
                             <button
                               onClick={() => handlePrintSingleMouza(sample.upazila, sample.mouza)}
                               className="no-print px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded text-xs flex items-center gap-1 shadow-sm"
                             >
                               <Printer className="w-3 h-3" />
-                              <span>শুধুমাত্র এই মৌজা প্রিন্ট</span>
+                              <span>প্রিন্ট</span>
                             </button>
                           )}
                         </div>
@@ -575,6 +765,9 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                                 {col.label}
                               </th>
                             ))}
+                            <th className="p-1.5 text-center text-[11px] leading-tight no-print">
+                              ডাউনলোড
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-300">
@@ -675,6 +868,22 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                                   </td>
                                 );
                               })}
+                              <td className="p-1.5 text-center no-print whitespace-nowrap">
+                                <button
+                                  onClick={() =>
+                                    handleDirectDownloadSingleMouzaPdf(
+                                      [rec],
+                                      `${rec.mouza}_Kh_${rec.khatianNo}_Dag_${rec.dagNo}`
+                                    )
+                                  }
+                                  disabled={isGeneratingPdf}
+                                  className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-[10px] inline-flex items-center gap-0.5"
+                                  title="এই একক খতিয়ান ও দাগ রেকর্ডটি PDF হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                                >
+                                  <Download className="w-2.5 h-2.5" />
+                                  <span>.PDF</span>
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -682,7 +891,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                         {/* Mouza Table Footer Totals */}
                         <tfoot>
                           <tr className="bg-slate-100 text-slate-950 font-bold border-t-2 border-slate-900 divide-x divide-slate-400">
-                            <td colSpan={visibleColumns.length} className="p-2">
+                            <td colSpan={visibleColumns.length + 1} className="p-2">
                               <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                                 <span>
                                   {sample.mouza} মৌজার মোট রেকর্ড: {toBengaliNumber(mouzaRecords.length)} টি

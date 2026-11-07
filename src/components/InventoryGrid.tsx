@@ -4,7 +4,6 @@ import {
   CheckSquare,
   Square,
   ArrowUpDown,
-  MoreVertical,
   Edit,
   Trash2,
   FileSpreadsheet,
@@ -12,20 +11,21 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  CheckCircle2,
-  SlidersHorizontal,
   Plus,
-  Maximize2,
-  Minimize2,
+  Download,
+  FileText,
+  FileJson,
+  Loader2,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
 import {
   convertAcreToBigha,
   convertAcreToKatha,
-  formatAreaBengali,
   parseAcreValue,
   toBengaliNumber,
 } from '../utils/bengaliNumerals';
+import { exportToCSV, exportToExcel, exportToJSON } from '../utils/exportUtils';
+import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface InventoryGridProps {
   records: LandRecord[];
@@ -69,6 +69,8 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
   const [density, setDensity] = useState<'compact' | 'normal' | 'spacious'>('normal');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [downloadingRowId, setDownloadingRowId] = useState<string | null>(null);
 
   const visibleColumns = columns.filter((c) => c.visible).sort((a, b) => a.order - b.order);
 
@@ -127,6 +129,39 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
     setSelectedIds(newSet);
   };
 
+  const handleDownloadGridPdf = async (onlySelected = false) => {
+    if (isDownloadingPdf) return;
+    const target = onlySelected
+      ? sortedRecords.filter((r) => selectedIds.has(r.id))
+      : sortedRecords;
+    if (target.length === 0) return;
+
+    setIsDownloadingPdf(true);
+    try {
+      await downloadMouzaLandRecordsPdf(
+        target,
+        columns,
+        onlySelected ? 'Selected_Records' : 'Master_Ledger'
+      );
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadSingleRowPdf = async (rec: LandRecord) => {
+    if (downloadingRowId) return;
+    setDownloadingRowId(rec.id);
+    try {
+      await downloadMouzaLandRecordsPdf(
+        [rec],
+        columns,
+        `Khatian_${rec.khatianNo}_Dag_${rec.dagNo}`
+      );
+    } finally {
+      setDownloadingRowId(null);
+    }
+  };
+
   // Distinct survey types and land classes for quick filtering
   const surveyTypes = Array.from(new Set(records.map((r) => r.surveyType))).filter(Boolean);
   const landClasses = Array.from(new Set(records.map((r) => r.landClass))).filter(Boolean);
@@ -178,10 +213,10 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
 
   return (
     <div className="flex-1 flex flex-col bg-[#121827] border border-amber-500/20 rounded-xl overflow-hidden shadow-xl shadow-black/40">
-      {/* Search & Filter Toolbar */}
+      {/* Search, Filter & Local Disk Download Toolbar */}
       <div className="p-3.5 border-b border-slate-800 bg-[#151c2d] flex flex-wrap items-center justify-between gap-3">
         {/* Search Input */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
@@ -192,8 +227,8 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
           />
         </div>
 
-        {/* Survey & Land Class Filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Survey, Land Class & Direct Local Disk Save Buttons */}
+        <div className="flex flex-wrap items-center gap-1.5">
           {/* Survey filter */}
           <select
             value={selectedSurveyType}
@@ -214,7 +249,7 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
             onChange={(e) => setSelectedLandClass(e.target.value)}
             className="bg-[#0d1322] border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-400 font-bengali"
           >
-            <option value="">সকল জমির শ্রেণি (নাল, বাড়ি...)</option>
+            <option value="">সকল জমির শ্রেণি</option>
             {landClasses.map((lc) => (
               <option key={lc} value={lc}>
                 শ্রেণি: {lc}
@@ -222,8 +257,50 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
             ))}
           </select>
 
+          {/* Direct Local Disk Save Buttons for Active Ledger */}
+          <button
+            onClick={() => handleDownloadGridPdf(false)}
+            disabled={isDownloadingPdf || sortedRecords.length === 0}
+            className="px-2.5 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 disabled:opacity-50 rounded-lg flex items-center gap-1 shadow transition-all font-bengali"
+            title="বর্তমান লেজার তালিকাটি PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+            )}
+            <span>লেজার PDF (.pdf)</span>
+          </button>
+
+          <button
+            onClick={() => exportToExcel(sortedRecords, columns, 'LR_Master_Ledger')}
+            className="px-2.5 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
+            title="বর্তমান লেজার তালিকাটি Excel (.xlsx) হিসেবে লোকাল ডিস্কে সেভ করুন"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Excel</span>
+          </button>
+
+          <button
+            onClick={() => exportToCSV(sortedRecords, columns, 'LR_Master_Ledger')}
+            className="px-2 py-1.5 text-xs font-semibold text-sky-300 bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
+            title="বর্তমান লেজার তালিকাটি CSV হিসেবে লোকাল ডিস্কে সেভ করুন"
+          >
+            <FileText className="w-3.5 h-3.5 text-sky-400" />
+            <span>CSV</span>
+          </button>
+
+          <button
+            onClick={() => exportToJSON(sortedRecords, 'LR_Master_Ledger')}
+            className="px-2 py-1.5 text-xs font-semibold text-purple-300 bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
+            title="বর্তমান লেজার তালিকাটি JSON হিসেবে লোকাল ডিস্কে সেভ করুন"
+          >
+            <FileJson className="w-3.5 h-3.5 text-purple-400" />
+            <span>JSON</span>
+          </button>
+
           {/* Density Switcher */}
-          <div className="hidden sm:flex items-center bg-[#0d1322] border border-slate-700/80 rounded-lg p-0.5">
+          <div className="hidden xl:flex items-center bg-[#0d1322] border border-slate-700/80 rounded-lg p-0.5 font-bengali">
             <button
               onClick={() => setDensity('compact')}
               title="কমপ্যাক্ট ঘনত্ব"
@@ -270,23 +347,56 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
           <div className="flex items-center gap-2 text-amber-300">
             <CheckSquare className="w-4 h-4 text-amber-400" />
             <span className="font-semibold">
-              {toBengaliNumber(selectedIds.size)} টি রেকর্ড নির্বাচিত
+              {toBengaliNumber(selectedIds.size)} টি রেকর্ড নির্বাচিত — সরাসরি লোকাল ডিস্কে সেভ করুন:
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleDownloadGridPdf(true)}
+              disabled={isDownloadingPdf}
+              className="px-2.5 py-1 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded flex items-center gap-1.5 transition-colors shadow"
+            >
+              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>নির্বাচিত PDF ডাউনলোড (.pdf)</span>
+            </button>
             <button
               onClick={onPrintSelected}
               className="px-2.5 py-1 text-xs font-medium text-slate-200 bg-[#25324e] hover:bg-[#2d3d5e] border border-slate-600 rounded flex items-center gap-1.5 transition-colors"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>নির্বাচিত প্রিন্ট (A4)</span>
+              <span>নির্বাচিত প্রিন্ট ভিউ (A4)</span>
             </button>
             <button
               onClick={onExportSelected}
               className="px-2.5 py-1 text-xs font-medium text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-500/40 rounded flex items-center gap-1.5 transition-colors"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>নির্বাচিত এক্সেল</span>
+              <span>নির্বাচিত Excel (.xlsx)</span>
+            </button>
+            <button
+              onClick={() =>
+                exportToCSV(
+                  sortedRecords.filter((r) => selectedIds.has(r.id)),
+                  columns,
+                  'LR_Master_Ledger_Selected'
+                )
+              }
+              className="px-2.5 py-1 text-xs font-medium text-sky-300 bg-sky-950/40 hover:bg-sky-950/60 border border-sky-500/40 rounded flex items-center gap-1.5 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5 text-sky-400" />
+              <span>নির্বাচিত CSV</span>
+            </button>
+            <button
+              onClick={() =>
+                exportToJSON(
+                  sortedRecords.filter((r) => selectedIds.has(r.id)),
+                  'LR_Master_Ledger_Selected'
+                )
+              }
+              className="px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-500/40 rounded flex items-center gap-1.5 transition-colors"
+            >
+              <FileJson className="w-3.5 h-3.5 text-purple-400" />
+              <span>নির্বাচিত JSON</span>
             </button>
             <button
               onClick={onDeleteSelected}
@@ -352,8 +462,8 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
                 ))}
 
                 {/* Actions column */}
-                <th className="py-2.5 px-3 text-right font-semibold text-slate-400 w-24">
-                  অ্যাকশন
+                <th className="py-2.5 px-3 text-right font-semibold text-slate-400 w-32">
+                  অ্যাকশন / সেভ
                 </th>
               </tr>
             </thead>
@@ -498,9 +608,35 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
                       );
                     })}
 
-                    {/* Actions */}
+                    {/* Actions + Single Record Local Disk PDF/JSON Save */}
                     <td className="py-2 px-3 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleDownloadSingleRowPdf(rec)}
+                          disabled={downloadingRowId === rec.id}
+                          className="px-1.5 py-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-500/40 rounded flex items-center gap-0.5 transition-colors"
+                          title="এই খতিয়ান ও দাগের একক স্লিপ PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+                        >
+                          {downloadingRowId === rec.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Download className="w-3 h-3" />
+                          )}
+                          <span>PDF</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            exportToJSON(
+                              rec,
+                              `Khatian_${rec.khatianNo}_Dag_${rec.dagNo}`
+                            )
+                          }
+                          className="px-1.5 py-1 text-[10px] font-semibold text-purple-300 bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/40 rounded flex items-center gap-0.5 transition-colors"
+                          title="এই একক খতিয়ান ও দাগ রেকর্ডটি JSON হিসেবে লোকাল ডিস্কে সেভ করুন"
+                        >
+                          <FileJson className="w-3 h-3" />
+                          <span>JSON</span>
+                        </button>
                         <button
                           onClick={() => onEditRecord(rec)}
                           className="p-1 text-slate-400 hover:text-amber-300 rounded hover:bg-slate-800 transition-colors"

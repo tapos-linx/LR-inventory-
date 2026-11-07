@@ -9,10 +9,24 @@ import {
   Layers,
   FileCheck,
   Search,
-  ExternalLink,
+  Download,
+  FileSpreadsheet,
+  FileJson,
+  Loader2,
 } from 'lucide-react';
 import { IngestedArchiveNode, LandRecord } from '../types/landRecord';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
+import {
+  exportGenericTableToCSV,
+  exportGenericTableToExcel,
+  exportToJSON,
+  flattenArchiveTreeRows,
+} from '../utils/exportUtils';
+import { DEFAULT_COLUMNS } from '../utils/mockData';
+import {
+  downloadForensicReportTablePdf,
+  downloadMouzaLandRecordsPdf,
+} from '../utils/pdfDownloadEngine';
 
 interface ArchiveTreeViewProps {
   tree: IngestedArchiveNode | null;
@@ -21,6 +35,17 @@ interface ArchiveTreeViewProps {
   onOpenIngest: () => void;
 }
 
+const ARCHIVE_TREE_HEADERS = [
+  { key: 'slNo', label: 'ক্রমিক', width: 80 },
+  { key: 'nodeType', label: 'ধরণ (Folder/File)', width: 140 },
+  { key: 'name', label: 'ফোল্ডার / ফাইলের নাম', width: 240 },
+  { key: 'relativePath', label: 'সম্পূর্ণ রিলেটিভ পাথ (Relative Path)', width: 340 },
+  { key: 'fileSize', label: 'আকার (Size)', width: 110 },
+  { key: 'mouzaAndJl', label: 'ম্যাপকৃত মৌজা ও জে.এল.', width: 190 },
+  { key: 'surveyKhatianDag', label: 'জরিপ, খতিয়ান ও দাগ নং', width: 210 },
+  { key: 'ownerAndArea', label: 'মালিক ও জমির পরিমাণ', width: 290 },
+];
+
 export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
   tree,
   records,
@@ -28,6 +53,8 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
   onOpenIngest,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [downloadingNodePath, setDownloadingNodePath] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({
     '': true,
     'Master_LR_Records': true,
@@ -37,6 +64,103 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
 
   const toggleExpand = (path: string) => {
     setExpandedPaths((prev) => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  const handleDownloadNodePdf = async (
+    node: IngestedArchiveNode,
+    matchedRecord: LandRecord | null
+  ) => {
+    if (downloadingNodePath) return;
+    const nodeKey = node.path || node.name;
+    setDownloadingNodePath(nodeKey);
+    try {
+      if (matchedRecord) {
+        await downloadMouzaLandRecordsPdf(
+          [matchedRecord],
+          DEFAULT_COLUMNS,
+          `Record_${matchedRecord.mouza}_Kh_${matchedRecord.khatianNo}_Dag_${matchedRecord.dagNo}`
+        );
+      } else {
+        const rows = flattenArchiveTreeRows(node, records);
+        await downloadForensicReportTablePdf({
+          reportTitle: `ARCHIVE NODE MANIFEST: ${node.name}`,
+          reportSubtitle: `পাথ: ${node.path || '/'} | মোট আইটেম: ${toBengaliNumber(rows.length)} টি`,
+          headers: ARCHIVE_TREE_HEADERS,
+          rows,
+          fileNamePrefix: `Archive_Node_${node.name.replace(/[^a-zA-Z0-9\u0980-\u09FF_-]/g, '_')}`,
+        });
+      }
+    } finally {
+      setDownloadingNodePath(null);
+    }
+  };
+
+  const handleDownloadNodeJson = (
+    node: IngestedArchiveNode,
+    matchedRecord: LandRecord | null
+  ) => {
+    if (matchedRecord) {
+      exportToJSON(
+        matchedRecord,
+        `Record_${matchedRecord.mouza}_Kh_${matchedRecord.khatianNo}_Dag_${matchedRecord.dagNo}`
+      );
+    } else {
+      exportToJSON(
+        {
+          nodeName: node.name,
+          nodePath: node.path,
+          flattenedRows: flattenArchiveTreeRows(node, records),
+        },
+        `Archive_Node_${node.name.replace(/[^a-zA-Z0-9\u0980-\u09FF_-]/g, '_')}`
+      );
+    }
+  };
+
+  const handleDownloadTreePdf = async () => {
+    if (!tree || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      const rows = flattenArchiveTreeRows(tree, records);
+      await downloadForensicReportTablePdf({
+        reportTitle: 'ARCHIVE FILE-TREE & RECORD MAPPING MANIFEST (আর্কাইভ ফোল্ডার ও ফাইল ট্রি ম্যানিফেস্ট)',
+        reportSubtitle: `সর্বমোট সক্রিয় খতিয়ান রেকর্ড: ${toBengaliNumber(records.length)} টি | ফোল্ডার ও ফাইল ম্যাপিং তালিকা`,
+        headers: ARCHIVE_TREE_HEADERS,
+        rows,
+        fileNamePrefix: 'LR_Archive_File_Tree_Manifest',
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadTreeExcel = () => {
+    if (!tree) return;
+    const rows = flattenArchiveTreeRows(tree, records);
+    exportGenericTableToExcel(
+      ARCHIVE_TREE_HEADERS,
+      rows,
+      'LR_Archive_File_Tree_Manifest',
+      'আর্কাইভ ফাইল ট্রি'
+    );
+  };
+
+  const handleDownloadTreeCsv = () => {
+    if (!tree) return;
+    const rows = flattenArchiveTreeRows(tree, records);
+    exportGenericTableToCSV(ARCHIVE_TREE_HEADERS, rows, 'LR_Archive_File_Tree_Manifest');
+  };
+
+  const handleDownloadTreeJson = () => {
+    if (!tree) return;
+    exportToJSON(
+      {
+        generatedAt: new Date().toISOString(),
+        totalMappedRecords: records.length,
+        archiveTree: tree,
+        flattenedManifest: flattenArchiveTreeRows(tree, records),
+      },
+      'LR_Archive_File_Tree_Manifest'
+    );
   };
 
   const renderNode = (node: IngestedArchiveNode, depth = 0) => {
@@ -50,7 +174,7 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
             r.relativePath === node.path ||
             r.fileName === node.name ||
             node.path.endsWith(r.fileName || '___')
-        )
+        ) || null
       : null;
 
     if (
@@ -61,8 +185,10 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
       return null;
     }
 
+    const nodeKey = node.path || node.name;
+
     return (
-      <div key={node.path || node.name} className="select-none text-xs">
+      <div key={nodeKey} className="select-none text-xs">
         <div
           className={`flex items-center justify-between py-1 px-2 rounded-md hover:bg-slate-800/60 transition-colors group ${
             matchedRecord ? 'cursor-pointer hover:bg-amber-500/10' : ''
@@ -125,8 +251,37 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono-num ml-2 shrink-0">
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono-num ml-2 shrink-0">
             {node.size && <span>{(node.size / 1024).toFixed(1)} KB</span>}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownloadNodePdf(node, matchedRecord);
+              }}
+              disabled={downloadingNodePath === nodeKey}
+              className="px-1.5 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-0.5 font-bengali transition-colors"
+              title="এই আইটেমটি PDF হিসেবে সরাসরি লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              {downloadingNodePath === nodeKey ? (
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Download className="w-2.5 h-2.5" />
+              )}
+              <span>Download .PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownloadNodeJson(node, matchedRecord);
+              }}
+              className="px-1.5 py-0.5 rounded bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 text-purple-300 font-semibold flex items-center gap-0.5 font-bengali transition-colors"
+              title="এই আইটেমটি JSON হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+            >
+              <FileJson className="w-2.5 h-2.5" />
+              <span>.JSON</span>
+            </button>
             {matchedRecord && (
               <span className="text-amber-400 group-hover:inline hidden font-bengali">
                 বিবরণ দেখুন →
@@ -154,15 +309,15 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
           </div>
           <div>
             <h2 className="text-xs sm:text-sm font-bold text-white">
-              ইনজেস্টেড আর্কাইভ ফাইল ট্রি ইন্সপেক্টর (File-Tree Inspection Panel)
+              ইনজেস্টেড আর্কাইভ ফাইল ট্রি ইন্সপেক্টর ও ম্যানিফেস্ট (File-Tree Manifest)
             </h2>
             <p className="text-[11px] text-slate-400">
-              ফোল্ডার কাঠামো ও প্রতিটি খতিয়ান ফাইলের সাথে ডাটাবেজ রেকর্ডের ম্যাপিং
+              ফোল্ডার কাঠামো ও প্রতিটি খতিয়ান ফাইলের সাথে ডাটাবেজ রেকর্ডের ম্যাপিং — লোকাল ডিস্কে সেভ করুন
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
             <input
@@ -174,9 +329,54 @@ export const ArchiveTreeView: React.FC<ArchiveTreeViewProps> = ({
             />
           </div>
 
+          {tree && (
+            <>
+              <button
+                onClick={handleDownloadTreePdf}
+                disabled={isDownloadingPdf}
+                className="px-3 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-lg flex items-center gap-1 shadow transition-all"
+                title="আর্কাইভ ফাইল ট্রি ম্যানিফেস্ট PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                )}
+                <span>ট্রি ম্যানিফেস্ট PDF (.pdf)</span>
+              </button>
+
+              <button
+                onClick={handleDownloadTreeExcel}
+                className="px-2.5 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1 transition-colors"
+                title="আর্কাইভ ফাইল ট্রি ম্যানিফেস্ট Excel হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Excel (.xlsx)</span>
+              </button>
+
+              <button
+                onClick={handleDownloadTreeCsv}
+                className="px-2.5 py-1.5 text-xs font-semibold text-sky-300 bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 rounded-lg flex items-center gap-1 transition-colors"
+                title="আর্কাইভ ফাইল ট্রি ম্যানিফেস্ট CSV হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <FileText className="w-3.5 h-3.5 text-sky-400" />
+                <span>CSV</span>
+              </button>
+
+              <button
+                onClick={handleDownloadTreeJson}
+                className="px-2.5 py-1.5 text-xs font-semibold text-purple-300 bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/40 rounded-lg flex items-center gap-1 transition-colors"
+                title="আর্কাইভ ফাইল ট্রি ম্যানিফেস্ট JSON হিসেবে লোকাল ডিস্কে সেভ করুন"
+              >
+                <FileJson className="w-3.5 h-3.5 text-purple-400" />
+                <span>JSON</span>
+              </button>
+            </>
+          )}
+
           <button
             onClick={onOpenIngest}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors flex items-center gap-1 shadow"
+            className="px-3 py-1.5 text-xs font-semibold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg transition-colors flex items-center gap-1"
           >
             <span>নতুন আর্কাইভ যোগ করুন</span>
           </button>

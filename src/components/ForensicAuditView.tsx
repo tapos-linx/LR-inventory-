@@ -55,7 +55,12 @@ import {
   runMandatoryForensicTests,
 } from '../utils/forensicEngine';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
-import { downloadForensicReportTablePdf } from '../utils/pdfDownloadEngine';
+import { DEFAULT_COLUMNS } from '../utils/mockData';
+import { exportToExcel, exportToJSON } from '../utils/exportUtils';
+import {
+  downloadForensicReportTablePdf,
+  downloadMouzaLandRecordsPdf,
+} from '../utils/pdfDownloadEngine';
 
 interface ForensicAuditViewProps {
   records: LandRecord[];
@@ -882,6 +887,302 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  // Download Evidence Register directly to Local Disk (.pdf & .xlsx)
+  const handleDownloadEvidenceRegisterPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await downloadForensicReportTablePdf({
+        reportTitle: 'EVIDENCE ID & DOCUMENT TRACEABILITY REGISTER (প্রমাণ নিবন্ধন ও উৎস তালিকা)',
+        reportSubtitle: `মোট নিবন্ধিত প্রামাণ্য দলিল: ${toBengaliNumber(evidenceDocs.length)} টি | SHA-256 হ্যাশ ও প্রমাণের স্তরক্রম`,
+        headers: [
+          { key: 'evidenceId', label: 'Evidence ID', width: 120 },
+          { key: 'fileName', label: 'Original File Name', width: 230 },
+          { key: 'docType', label: 'Document Type', width: 170 },
+          { key: 'tier', label: 'Hierarchy Tier', width: 220 },
+          { key: 'geo', label: 'Mouza & JL No.', width: 180 },
+          { key: 'sha256', label: 'SHA-256 Hash', width: 260 },
+          { key: 'status', label: 'Verification Status', width: 190 },
+        ],
+        rows: evidenceDocs.map((d) => ({
+          evidenceId: d.evidenceId,
+          fileName: d.originalFileName,
+          docType: d.documentType,
+          tier: d.hierarchyTier,
+          geo: `${d.district} → ${d.upazila} → ${d.mouza} (JL ${d.jlNo})`,
+          sha256: d.sha256Hash,
+          status: d.verificationStatus,
+        })),
+        fileNamePrefix: 'Forensic_Evidence_Traceability_Register',
+      });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const handleDownloadEvidenceRegisterExcel = () => {
+    const rows = evidenceDocs.map((d) => ({
+      'Evidence ID': d.evidenceId,
+      'Original File Name': d.originalFileName,
+      'Document Type': d.documentType,
+      'Hierarchy Tier': d.hierarchyTier,
+      'District / Upazila / Mouza': `${d.district} → ${d.upazila} → ${d.mouza} (JL ${d.jlNo})`,
+      'SHA-256 Hash': d.sha256Hash,
+      'Verification Status': d.verificationStatus,
+      'Duplicate Upload': d.isDuplicateUpload ? 'হ্যাঁ' : 'না',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Evidence_Register');
+    XLSX.writeFile(wb, `Forensic_Evidence_Register_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Generic Per-Item / Per-Row Forensic Document Download (.pdf & .json) to Local Disk
+  const handleDownloadSingleItemPdf = async (
+    itemTitle: string,
+    itemSubtitle: string,
+    fieldMap: Record<string, string>,
+    fileNamePrefix: string
+  ) => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      const rows = Object.entries(fieldMap).map(([field, value], idx) => ({
+        sl: toBengaliNumber(idx + 1),
+        field,
+        value: value || '—',
+      }));
+      await downloadForensicReportTablePdf({
+        reportTitle: itemTitle,
+        reportSubtitle: itemSubtitle,
+        headers: [
+          { key: 'sl', label: 'ক্রমিক', width: 90 },
+          { key: 'field', label: 'ফরেনসিক ক্ষেত্র / বিবরণ (Field)', width: 320 },
+          { key: 'value', label: 'প্রামাণ্য তথ্য ও ফলাফল (Verified Value)', width: 850 },
+        ],
+        rows,
+        fileNamePrefix,
+      });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const handleDownloadSingleItemJson = (data: unknown, fileNamePrefix: string) => {
+    exportToJSON(data, fileNamePrefix);
+  };
+
+  // Download a Specific Ledger Snapshot (Version History Item or Current Active Snapshot) to Local Disk
+  const handleDownloadLedgerSnapshot = async (
+    snapshotRecords: LandRecord[],
+    versionId: string,
+    format: 'pdf' | 'xlsx' | 'json'
+  ) => {
+    const cleanId = versionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (format === 'pdf') {
+      if (isExportingPdf) return;
+      setIsExportingPdf(true);
+      try {
+        await downloadMouzaLandRecordsPdf(
+          snapshotRecords,
+          DEFAULT_COLUMNS,
+          `Ledger_Snapshot_${cleanId}`
+        );
+      } finally {
+        setIsExportingPdf(false);
+      }
+    } else if (format === 'xlsx') {
+      exportToExcel(snapshotRecords, DEFAULT_COLUMNS, `Ledger_Snapshot_${cleanId}`);
+    } else {
+      exportToJSON(
+        {
+          versionId,
+          exportedAt: new Date().toISOString(),
+          recordCount: snapshotRecords.length,
+          records: snapshotRecords,
+        },
+        `Ledger_Snapshot_${cleanId}`
+      );
+    }
+  };
+
+  // Download ALL 12 Forensic Documents in a single Multi-Sheet Excel Workbook (.xlsx) to Local Disk
+  const handleExportAllForensicDocumentsWorkbook = () => {
+    const wb = XLSX.utils.book_new();
+
+    const appendSheet = (sheetName: string, rows: Record<string, string>[]) => {
+      const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{ Note: 'No entries' }]);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+    };
+
+    appendSheet(
+      '01_Extracted_Docs',
+      filteredExtractedEntries.map((e) => ({
+        'Evidence ID': e.evidenceId,
+        'Source Document': `${e.sourceDocumentName} (${e.pageLocation})`,
+        Geography: `${e.district} → ${e.upazila} → ${e.mouza} (JL ${e.jlNo})`,
+        'Survey / Khatian / Dag': `${e.surveyType} | Kh ${e.khatianNo} | Dag ${e.dagNo}`,
+        'Original Name': e.originalPersonName,
+        'Normalized Name': e.normalizedPersonName,
+        'Father Name': e.fatherOriginalName,
+        'Area & Share': `${e.landAreaRaw} (${e.landAreaShatak} শতক) | ${e.share}`,
+        Status: e.evidenceStatus,
+      }))
+    );
+
+    appendSheet(
+      '02_Genealogy_Matched',
+      report2MatchedPersons.map((m) => ({
+        'Evidence ID': m.evidenceId,
+        'Extracted Name': m.originalExtractedName,
+        'Matched Genealogy': m.matchedGenealogyName,
+        'Father Comparison': m.fatherSpouseComparison,
+        Geography: m.geographicComparison,
+        'Khatian & Dag': m.khatianDagComparison,
+        Classification: m.matchClassification,
+        Status: m.evidenceStatus,
+      }))
+    );
+
+    appendSheet(
+      '03_Warish_Cert_Persons',
+      report3InheritancePersons.map((p) => ({
+        'Person ID': p.personId,
+        'Evidence ID': p.evidenceId,
+        'Original Name': p.originalName,
+        'Normalized Name': p.normalizedName,
+        'Father / Spouse': `${p.fatherName} | ${p.spouseName}`,
+        Relation: p.relationshipToDeceased,
+        'Certificate No': `${p.certificateNumber} (${p.issueDate})`,
+        CrossRef: `CS:${p.crossReferences.csRecordRef} | SA:${p.crossReferences.saRecordRef} | RS:${p.crossReferences.rsRecordRef} | BRS:${p.crossReferences.bsBrsRecordRef}`,
+        Category: p.outputGroup,
+      }))
+    );
+
+    appendSheet(
+      '04_Unmatched_Candidates',
+      report4UnmatchedPersons.map((u) => ({
+        'Evidence ID': u.evidenceId,
+        'Original Name': u.originalExtractedName,
+        'Father Comparison': u.fatherSpouseComparison,
+        Geography: u.geographicComparison,
+        Classification: u.matchClassification,
+        Reasons: u.conflictingEvidence.join(' | '),
+      }))
+    );
+
+    appendSheet(
+      '05_Dag_Khatian_Map',
+      report5CrossMappings.map((c) => ({
+        'Mapping ID': c.mappingId,
+        'Mouza & JL': `${c.mouza} (JL ${c.jlNo})`,
+        'CS Kh/Dag': `${c.csKhatian} / ${c.csDag}`,
+        'SA Kh/Dag': `${c.saKhatian} / ${c.saDag}`,
+        'RS Kh/Dag': `${c.rsKhatian} / ${c.rsDag}`,
+        'BS Kh/Dag': `${c.bsBrsKhatian} / ${c.bsBrsDag}`,
+        Owners: c.recordedOwnerProgression,
+        Verification: `${c.conversionType} [${c.verificationStatus}]`,
+      }))
+    );
+
+    appendSheet(
+      '06_Transition_Audit',
+      report6TransitionAudits.map((t) => ({
+        'Audit ID': t.auditId,
+        'Stage & Mouza': `${t.transitionStage} (${t.mouza}, JL ${t.jlNo})`,
+        'Earlier Record': t.earlierRecordSummary,
+        'Later Record': t.laterRecordSummary,
+        Changes: `${t.identifiedChanges.join(', ')} — ${t.changeDescription}`,
+        'Primary Source Gap': t.primarySourceGapNote || '—',
+        Status: t.status,
+      }))
+    );
+
+    appendSheet(
+      '07_Area_Reconciliation',
+      report7AreaReconciliations.map((a) => ({
+        'Reconciliation ID': a.reconciliationId,
+        'Parent Survey & Dag': `${a.parentSurvey} Kh ${a.parentKhatian} Dag ${a.parentDag}`,
+        'Primary Claim (Shatak)': String(a.parentAreaShatakPrimaryClaim),
+        'Alt Claim (Shatak)': String(a.parentAreaShatakAlternativeClaim ?? '—'),
+        'Identified Total (Shatak)': String(a.totalIdentifiedSuccessorShatak),
+        'Unexplained Gap Primary': `${a.unexplainedAreaPrimaryShatak} শতক`,
+        'Unexplained Gap Alt':
+          a.unexplainedAreaAltShatak !== undefined
+            ? `${a.unexplainedAreaAltShatak} শতক`
+            : '—',
+        Result: a.classificationLabel,
+      }))
+    );
+
+    appendSheet(
+      '08_Record_Gap_Register',
+      report8RecordGaps.map((g) => ({
+        'Gap ID': g.gapId,
+        Category: g.gapCategory,
+        'Khatian & Dag': `${g.mouza} (JL ${g.jlNo}) | ${g.affectedKhatianDag}`,
+        Description: g.description,
+        'Mandatory Safeguard': g.mandatoryNotice,
+        Status: g.status,
+      }))
+    );
+
+    appendSheet(
+      '09_Anomalies_Court',
+      report9Anomalies.map((an) => ({
+        'Anomaly ID': an.anomalyId,
+        Type: an.anomalyType,
+        SourceA: an.earlierOrSourceA,
+        SourceB: an.laterOrSourceB,
+        Finding: an.neutralFindingSummary,
+        Status: an.classification,
+      }))
+    );
+
+    appendSheet(
+      '10_Ledger_Proposals',
+      proposals.map((p) => ({
+        'Proposal ID': p.proposalId,
+        Type: p.proposalType,
+        'Mouza / Kh / Dag': `${p.proposedRecord.mouza} | Kh ${p.proposedRecord.khatianNo} | Dag ${p.proposedRecord.dagNo}`,
+        Owner: p.proposedRecord.ownerDetails,
+        Area: p.proposedRecord.area,
+        State: p.approvalState,
+      }))
+    );
+
+    appendSheet(
+      '11_Master_Genealogy',
+      genealogyLedger.map((g) => ({
+        'Person ID': g.personId,
+        Generation: `Gen ${g.generation}`,
+        'Original Name': g.originalName,
+        'Normalized Name': g.normalizedName,
+        Variants: g.variantSpellings.join(', '),
+        Father: g.fatherOriginalName,
+        Branch: g.relationshipLabel,
+        Status: g.verificationStatus,
+      }))
+    );
+
+    appendSheet(
+      '12_Tests_A_to_J',
+      testResults.map((t) => ({
+        Code: t.testCode,
+        Title: t.title,
+        Classification: t.actualClassification,
+        Status: t.evidenceStatus,
+        Result: t.passed ? 'PASSED' : 'FAILED',
+        Output: t.detailedOutput,
+      }))
+    );
+
+    XLSX.writeFile(
+      wb,
+      `LR_Complete_Forensic_Audit_All_12_Reports_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
+
   const getBadgeStyle = (status: string) => {
     if (status.includes('VERIFIED') && !status.includes('UNVERIFIED') && !status.includes('PARTIALLY'))
       return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
@@ -962,6 +1263,15 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
             >
               <FileJson className="w-3.5 h-3.5 text-purple-400" />
               <span>JSON (Evidence IDs)</span>
+            </button>
+
+            <button
+              onClick={handleExportAllForensicDocumentsWorkbook}
+              className="px-3 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 rounded-lg shadow flex items-center gap-1.5"
+              title="সকল ১২টি ফরেনসিক রিপোর্ট, বংশলতিকা ও টেস্ট স্যুট একসাথে একটি মাল্টি-শিট Excel ওয়ার্কবুকে লোকাল ডিস্কে সেভ করুন"
+            >
+              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>সকল ১২টি রিপোর্ট একসাথে সেভ (.xlsx)</span>
             </button>
           </div>
         </div>
@@ -1119,14 +1429,33 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
 
           {/* Evidence ID & Document Traceability Register (Section 15) */}
           <div className="lg:col-span-5 bg-[#121827] border border-slate-800 rounded-xl p-4 space-y-2.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-emerald-400" />
                 <span>এভিডেন্স আইডি ও সোর্স ট্রেসেবিলিটি রেজিস্টার (Section 15)</span>
               </h3>
-              <span className="text-[11px] text-slate-400">
-                মোট প্রামাণ্য উৎস: {toBengaliNumber(evidenceDocs.length)} টি
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-400">
+                  মোট উৎস: {toBengaliNumber(evidenceDocs.length)} টি
+                </span>
+                <button
+                  onClick={handleDownloadEvidenceRegisterPdf}
+                  disabled={isExportingPdf}
+                  className="px-2 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded text-[10px] flex items-center gap-1"
+                  title="এভিডেন্স রেজিস্টার PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>.PDF সেভ</span>
+                </button>
+                <button
+                  onClick={handleDownloadEvidenceRegisterExcel}
+                  className="px-2 py-1 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 text-emerald-300 font-semibold rounded text-[10px] flex items-center gap-1"
+                  title="এভিডেন্স রেজিস্টার Excel হিসেবে লোকাল ডিস্কে সেভ করুন"
+                >
+                  <FileSpreadsheet className="w-3 h-3" />
+                  <span>.XLSX সেভ</span>
+                </button>
+              </div>
             </div>
 
             <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
@@ -1152,13 +1481,51 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <code className="text-slate-300">{doc.sha256Hash.slice(0, 12)}...</code>
                     </div>
                   </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${getBadgeStyle(
-                      doc.verificationStatus
-                    )}`}
-                  >
-                    {doc.verificationStatus}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeStyle(
+                        doc.verificationStatus
+                      )}`}
+                    >
+                      {doc.verificationStatus}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadSingleItemPdf(
+                          `EVIDENCE RECORD: ${doc.evidenceId} (${doc.originalFileName})`,
+                          `ধরন: ${doc.documentType} | প্রমাণের স্তর: ${doc.hierarchyTier}`,
+                          {
+                            'Evidence ID': doc.evidenceId,
+                            'মূল ফাইলের নাম': doc.originalFileName,
+                            'দলিলের ধরন': doc.documentType,
+                            'প্রমাণের স্তরক্রম (Tier)': doc.hierarchyTier,
+                            'ভৌগোলিক পরিচয়': `${doc.district} → ${doc.upazila} → মৌজা: ${doc.mouza} (JL ${doc.jlNo})`,
+                            'SHA-256 হ্যাশ': doc.sha256Hash,
+                            'যাচাই স্ট্যাটাস': doc.verificationStatus,
+                            'নিষ্কাশিত মূল পাঠ': doc.extractedOriginalText,
+                          },
+                          `Evidence_Doc_${doc.evidenceId}`
+                        )
+                      }
+                      className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                      title="এই প্রামাণ্য দলিল রেকর্ডটি PDF হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                    >
+                      <Download className="w-2.5 h-2.5" />
+                      <span>PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadSingleItemJson(doc, `Evidence_Doc_${doc.evidenceId}`)
+                      }
+                      className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px] flex items-center gap-0.5"
+                      title="এই প্রামাণ্য দলিল রেকর্ডটি JSON হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                    >
+                      <FileJson className="w-2.5 h-2.5" />
+                      <span>JSON</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1356,6 +1723,51 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
             ))}
           </div>
 
+          {/* Dedicated Per-Document Local Disk Save Bar */}
+          <div className="px-4 py-2.5 bg-[#101829] border-b border-amber-500/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-200">
+              <Download className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                বর্তমান নির্বাচিত ডকুমেন্ট (<strong className="text-amber-300">{buildCurrentReportExportData().title}</strong>) সরাসরি লোকাল ডিস্কে সেভ করুন:
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={handleExportCurrentReportPdf}
+                disabled={isExportingPdf}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs flex items-center gap-1 shadow"
+              >
+                {isExportingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                )}
+                <span>লোকাল ডিস্কে PDF সেভ (.pdf)</span>
+              </button>
+              <button
+                onClick={handleExportCurrentReportExcel}
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 text-emerald-300 font-semibold text-xs flex items-center gap-1"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Excel সেভ (.xlsx)</span>
+              </button>
+              <button
+                onClick={handleExportCurrentReportCsv}
+                className="px-2.5 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900/70 border border-sky-500/40 text-sky-300 font-semibold text-xs flex items-center gap-1"
+              >
+                <FileText className="w-3.5 h-3.5 text-sky-400" />
+                <span>CSV সেভ (.csv)</span>
+              </button>
+              <button
+                onClick={handleExportCurrentReportJson}
+                className="px-2.5 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/40 text-purple-300 font-semibold text-xs flex items-center gap-1"
+              >
+                <FileJson className="w-3.5 h-3.5 text-purple-400" />
+                <span>JSON সেভ (.json)</span>
+              </button>
+            </div>
+          </div>
+
           {/* REPORT 1: UPLOADED DOCUMENT EXTRACTION */}
           {activeReportTab === 'report1' && (
             <div className="p-4 space-y-3">
@@ -1380,7 +1792,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">নরমালাইজড নাম</th>
                       <th className="p-2.5 border-r border-slate-800">পিতার নাম (Original)</th>
                       <th className="p-2.5 border-r border-slate-800">জমি ও অংশ</th>
-                      <th className="p-2.5">প্রমাণ স্ট্যাটাস</th>
+                      <th className="p-2.5">প্রমাণ স্ট্যাটাস ও ডাউনলোড</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1426,14 +1838,51 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           </div>
                           <div className="text-[11px] text-slate-400">অংশ: {e.share}</div>
                         </td>
-                        <td className="p-2.5">
+                        <td className="p-2.5 space-y-1.5">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeStyle(
+                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeStyle(
                               e.evidenceStatus
                             )}`}
                           >
                             {e.evidenceStatus}
                           </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `EXTRACTED ENTRY: ${e.evidenceId} — ${e.originalPersonName}`,
+                                  `${e.surveyType} খতিয়ান: ${e.khatianNo} | দাগ: ${e.dagNo} | মৌজা: ${e.mouza}`,
+                                  {
+                                    'Entry & Evidence ID': `${e.entryId} (${e.evidenceId})`,
+                                    'উৎস দলিল ও পৃষ্ঠা': `${e.sourceDocumentName} (${e.pageLocation})`,
+                                    'ভৌগোলিক পরিচয়': `${e.district} → ${e.upazila} → ${e.mouza} (JL ${e.jlNo}) [${e.geographicValidation.status}]`,
+                                    'জরিপ, খতিয়ান ও দাগ': `${e.surveyType} | খতিয়ান: ${e.khatianNo} | দাগ: ${e.dagNo}`,
+                                    'মূল নাম (Original)': e.originalPersonName,
+                                    'নরমালাইজড নাম': e.normalizedPersonName,
+                                    'পিতার নাম': e.fatherOriginalName,
+                                    'জমি ও অংশ': `${e.landAreaRaw} (${toBengaliNumber(e.landAreaShatak)} শতক) | অংশ: ${e.share}`,
+                                    'প্রমাণ স্ট্যাটাস': e.evidenceStatus,
+                                  },
+                                  `Extracted_Entry_${e.entryId}`
+                                )
+                              }
+                              className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                              title="এই নিষ্কাশিত এন্ট্রিটি PDF হিসেবে লোকাল ডিস্কে ডাউনলোড করুন"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              <span>Download .PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemJson(e, `Extracted_Entry_${e.entryId}`)
+                              }
+                              className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px]"
+                            >
+                              .JSON
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1464,7 +1913,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">পিতা/স্বামী ও ভৌগোলিক তুলনা</th>
                       <th className="p-2.5 border-r border-slate-800">খতিয়ান ও দাগ তুলনা</th>
                       <th className="p-2.5 border-r border-slate-800">সমর্থনকারী ও বিরোধী প্রমাণ</th>
-                      <th className="p-2.5">ফরেনসিক ম্যাচ ক্লাসিফিকেশন</th>
+                      <th className="p-2.5">ফরেনসিক ম্যাচ ক্লাসিফিকেশন ও ডাউনলোড</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1527,6 +1976,41 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono">
                             {m.neutralDesignation}
+                          </div>
+                          <div className="flex items-center gap-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `GENEALOGY MATCH REPORT: ${m.originalExtractedName}`,
+                                  `Evidence ID: ${m.evidenceId} | Classification: ${m.matchClassification}`,
+                                  {
+                                    'Match ID & Evidence': `${m.matchId} (${m.evidenceId})`,
+                                    'উদ্ধৃত মূল নাম': m.originalExtractedName,
+                                    'বংশলতিকায় ম্যাচকৃত নাম': m.matchedGenealogyName,
+                                    'পিতা/স্বামী তুলনা': m.fatherSpouseComparison,
+                                    'ভৌগোলিক তুলনা': m.geographicComparison,
+                                    'খতিয়ান ও দাগ তুলনা': m.khatianDagComparison,
+                                    'ম্যাচ ক্লাসিফিকেশন': `${m.matchClassification} [${m.evidenceStatus}]`,
+                                    'ফরেনসিক ব্যাখ্যা': m.explanation,
+                                  },
+                                  `Genealogy_Match_${m.matchId}`
+                                )
+                              }
+                              className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              <span>Download .PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemJson(m, `Genealogy_Match_${m.matchId}`)
+                              }
+                              className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px]"
+                            >
+                              .JSON
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1594,7 +2078,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2 border-r border-slate-800">Certificate No, Date & Authority</th>
                       <th className="p-2 border-r border-slate-800">Mouza, Source & Page</th>
                       <th className="p-2 border-r border-slate-800">CS / SA / RS / BRS Cross-Ref</th>
-                      <th className="p-2">Verification Status</th>
+                      <th className="p-2">Verification Status & Download</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1655,6 +2139,41 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           <div className="text-[9px] font-mono text-amber-300">
                             {p.neutralDesignation}
                           </div>
+                          <div className="flex items-center gap-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `INHERITANCE PERSON RECORD: ${p.originalName} (${p.personId})`,
+                                  `সনদ নং: ${p.certificateNumber} | ইস্যু তারিখ: ${p.issueDate}`,
+                                  {
+                                    'Person ID & Evidence': `${p.personId} (${p.evidenceId})`,
+                                    'মূল নাম (Original)': p.originalName,
+                                    'নরমালাইজড নাম': p.normalizedName,
+                                    'পিতা ও স্বামী': `পিতা: ${p.fatherName} | স্বামী: ${p.spouseName}`,
+                                    'মৃত পূর্বপুরুষের সাথে সম্পর্ক': p.relationshipToDeceased,
+                                    'ওয়ারিশ সনদ নং ও তারিখ': `${p.certificateNumber} (${p.issueDate})`,
+                                    'ঐতিহাসিক রেকর্ড ক্রস-রেফারেন্স': `CS: ${p.crossReferences.csRecordRef} | SA: ${p.crossReferences.saRecordRef} | RS: ${p.crossReferences.rsRecordRef} | BRS: ${p.crossReferences.bsBrsRecordRef}`,
+                                    'যাচাই স্ট্যাটাস': `${p.outputGroup} [${p.verificationStatus}]`,
+                                  },
+                                  `Warish_Person_${p.personId}`
+                                )
+                              }
+                              className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              <span>Download .PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemJson(p, `Warish_Person_${p.personId}`)
+                              }
+                              className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px]"
+                            >
+                              .JSON
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1685,7 +2204,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">ভৌগোলিক অবস্থান</th>
                       <th className="p-2.5 border-r border-slate-800">খতিয়ান ও দাগ</th>
                       <th className="p-2.5 border-r border-slate-800">ফরেনসিক ব্যাখ্যা</th>
-                      <th className="p-2.5">স্ট্যাটাস</th>
+                      <th className="p-2.5">স্ট্যাটাস ও ডাউনলোড</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1711,12 +2230,45 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <td className="p-2.5 border-r border-slate-800 text-slate-300">
                           {u.explanation}
                         </td>
-                        <td className="p-2.5">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                        <td className="p-2.5 space-y-1">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
                             {u.matchClassification}
                           </span>
-                          <div className="text-[10px] text-slate-400 mt-1">
+                          <div className="text-[10px] text-slate-400">
                             {u.neutralDesignation}
+                          </div>
+                          <div className="flex items-center gap-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `UNMATCHED PERSON RECORD: ${u.originalExtractedName}`,
+                                  `Evidence ID: ${u.evidenceId} | ${u.neutralDesignation}`,
+                                  {
+                                    'Match ID & Evidence': `${u.matchId} (${u.evidenceId})`,
+                                    'উদ্ধৃত নাম': u.originalExtractedName,
+                                    'পিতা/স্বামীর তথ্য': u.fatherSpouseComparison,
+                                    'ভৌগোলিক অবস্থান': `${u.extractedEntry.district} → ${u.extractedEntry.upazila} → ${u.extractedEntry.mouza}`,
+                                    'খতিয়ান ও দাগ': u.khatianDagComparison,
+                                    'ফরেনসিক ব্যাখ্যা': u.explanation,
+                                  },
+                                  `Unmatched_Person_${u.matchId}`
+                                )
+                              }
+                              className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              <span>Download .PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemJson(u, `Unmatched_Person_${u.matchId}`)
+                              }
+                              className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px]"
+                            >
+                              .JSON
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1749,7 +2301,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">RS খতিয়ান ও দাগ</th>
                       <th className="p-2.5 border-r border-slate-800">BS/BRS খতিয়ান ও দাগ</th>
                       <th className="p-2.5 border-r border-slate-800">মালিক, পিতা ও আয়তন ধারাবাহিকতা</th>
-                      <th className="p-2.5">রূপান্তর ধরন ও প্রমাণ</th>
+                      <th className="p-2.5">রূপান্তর ধরন, প্রমাণ ও ডাউনলোড</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1796,6 +2348,41 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           >
                             {m.verificationStatus}
                           </span>
+                          <div className="flex items-center gap-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `DAG & KHATIAN CROSS-MAPPING: ${m.mappingId}`,
+                                  `মৌজা: ${m.mouza} (JL ${m.jlNo}) | ${m.conversionType}`,
+                                  {
+                                    'Mapping ID & Evidence': `${m.mappingId} (${m.evidenceId})`,
+                                    'CS খতিয়ান ও দাগ': `খতিয়ান: ${m.csKhatian} | দাগ: ${m.csDag}`,
+                                    'SA খতিয়ান ও দাগ': `খতিয়ান: ${m.saKhatian} | দাগ: ${m.saDag}`,
+                                    'RS খতিয়ান ও দাগ': `খতিয়ান: ${m.rsKhatian} | দাগ: ${m.rsDag}`,
+                                    'BS/BRS খতিয়ান ও দাগ': `খতিয়ান: ${m.bsBrsKhatian} | দাগ: ${m.bsBrsDag}`,
+                                    'মালিকানার ধারাবাহিকতা': m.recordedOwnerProgression,
+                                    'আয়তন ধারাবাহিকতা': m.areaProgression,
+                                    'যাচাই স্ট্যাটাস': `${m.conversionType} [${m.verificationStatus}]`,
+                                  },
+                                  `Dag_Cross_Mapping_${m.mappingId}`
+                                )
+                              }
+                              className="px-1.5 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] flex items-center gap-0.5"
+                            >
+                              <Download className="w-2.5 h-2.5" />
+                              <span>Download .PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDownloadSingleItemJson(m, `Dag_Cross_Mapping_${m.mappingId}`)
+                              }
+                              className="px-1.5 py-0.5 rounded bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 font-semibold text-[10px]"
+                            >
+                              .JSON
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1825,7 +2412,8 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">Later Record</th>
                       <th className="p-2.5 border-r border-slate-800">Change (A–K Classification)</th>
                       <th className="p-2.5 border-r border-slate-800">Supporting Evidence</th>
-                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5 border-r border-slate-800">Status</th>
+                      <th className="p-2.5 text-center">Download</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1864,7 +2452,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <td className="p-2.5 border-r border-slate-800 font-mono text-slate-300">
                           {t.supportingEvidence}
                         </td>
-                        <td className="p-2.5">
+                        <td className="p-2.5 border-r border-slate-800">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeStyle(
                               t.status
@@ -1872,6 +2460,48 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           >
                             {t.status}
                           </span>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `Record Transition Audit (${t.transitionStage})`,
+                                  `${t.auditId} | মৌজা: ${t.mouza} | Status: ${t.status}`,
+                                  {
+                                    'Audit ID': t.auditId,
+                                    'Transition Stage': t.transitionStage,
+                                    'মৌজা ও JL': `${t.mouza} (JL ${t.jlNo})`,
+                                    'পূর্ববর্তী রেকর্ড': t.earlierRecordSummary,
+                                    'পরবর্তী রেকর্ড': t.laterRecordSummary,
+                                    'পরিবর্তনের ধরন': t.identifiedChanges.join(', '),
+                                    'বিবরণ': t.changeDescription,
+                                    'গ্যাপ নোট': t.primarySourceGapNote || '—',
+                                    'প্রমাণ ও স্ট্যাটাস': `${t.supportingEvidence} (${t.status})`,
+                                  },
+                                  `Forensic_Report6_Transition_${t.auditId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Transition Audit as PDF"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemJson(
+                                  t,
+                                  `Forensic_Report6_Transition_${t.auditId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Transition Audit as JSON"
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span>JSON</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1901,7 +2531,8 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">শনাক্তকৃত পরবর্তী (Successor) রেকর্ডসমূহ</th>
                       <th className="p-2.5 border-r border-slate-800">মোট শনাক্তকৃত আয়তন</th>
                       <th className="p-2.5 border-r border-slate-800">অমীমাংসিত জমি (Unexplained Area)</th>
-                      <th className="p-2.5">ফরেনসিক সিদ্ধান্ত ও Evidence ID</th>
+                      <th className="p-2.5 border-r border-slate-800">ফরেনসিক সিদ্ধান্ত ও Evidence ID</th>
+                      <th className="p-2.5 text-center">Download</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -1960,11 +2591,52 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                             </div>
                           )}
                         </td>
-                        <td className="p-2.5 space-y-1">
+                        <td className="p-2.5 border-r border-slate-800 space-y-1">
                           <div className="font-bold text-amber-300">{r.classificationLabel}</div>
                           <div className="text-[11px] text-slate-300">{r.notes}</div>
                           <div className="text-[10px] font-mono text-slate-400">
                             Evidence IDs: {r.evidenceIds.join(', ')}
+                          </div>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `Land Area Reconciliation (${r.parentSurvey} দাগ ${r.parentDag})`,
+                                  `${r.reconciliationId} | ${r.classificationLabel}`,
+                                  {
+                                    'Reconciliation ID': r.reconciliationId,
+                                    'প্যারেন্ট খতিয়ান ও দাগ': `${r.parentSurvey} খতিয়ান ${r.parentKhatian}, দাগ ${r.parentDag}`,
+                                    'প্যারেন্ট মালিক': r.parentOwner,
+                                    'প্যারেন্ট আয়তন (প্রাথমিক)': `${toBengaliNumber(r.parentAreaShatakPrimaryClaim)} শতক`,
+                                    'মোট শনাক্তকৃত আয়তন': `${toBengaliNumber(r.totalIdentifiedSuccessorShatak)} শতক`,
+                                    'অমীমাংসিত জমি (Unexplained)': `${toBengaliNumber(r.unexplainedAreaPrimaryShatak)} শতক`,
+                                    'সিদ্ধান্ত ও নোট': `${r.classificationLabel} — ${r.notes}`,
+                                    'এভিডেন্স আইডি': r.evidenceIds.join(', '),
+                                  },
+                                  `Forensic_Report7_Area_${r.reconciliationId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Area Reconciliation as PDF"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemJson(
+                                  r,
+                                  `Forensic_Report7_Area_${r.reconciliationId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Area Reconciliation as JSON"
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span>JSON</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1994,7 +2666,8 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">মৌজা, খতিয়ান ও দাগ</th>
                       <th className="p-2.5 border-r border-slate-800">সংশ্লিষ্ট রেকর্ড-সংযুক্ত ব্যক্তিগণ</th>
                       <th className="p-2.5 border-r border-slate-800">বিবরণ</th>
-                      <th className="p-2.5">বাধ্যতামূলক ফরেনসিক নোট ও স্ট্যাটাস</th>
+                      <th className="p-2.5 border-r border-slate-800">বাধ্যতামূলক ফরেনসিক নোট ও স্ট্যাটাস</th>
+                      <th className="p-2.5 text-center">Download</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -2016,12 +2689,50 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <td className="p-2.5 border-r border-slate-800 text-slate-300">
                           {g.description}
                         </td>
-                        <td className="p-2.5 space-y-1">
+                        <td className="p-2.5 border-r border-slate-800 space-y-1">
                           <div className="p-2 rounded bg-rose-950/50 border border-rose-500/40 text-rose-200 font-mono text-[11px] font-bold">
                             {g.mandatoryNotice}
                           </div>
                           <div className="text-[10px] font-mono text-slate-400">
                             Evidence: {g.evidenceIds.join(', ')} · Status: {g.status}
+                          </div>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `Record Gap Certificate (${g.gapCategory})`,
+                                  `${g.gapId} | Status: ${g.status}`,
+                                  {
+                                    'Gap ID': g.gapId,
+                                    'ক্যাটাগরি': g.gapCategory,
+                                    'মৌজা ও JL': `${g.mouza} (JL ${g.jlNo})`,
+                                    'সংশ্লিষ্ট খতিয়ান ও দাগ': g.affectedKhatianDag,
+                                    'সংশ্লিষ্ট ব্যক্তিগণ': g.affectedPersons,
+                                    'বিবরণ': g.description,
+                                    'বাধ্যতামূলক ফরেনসিক নোট': g.mandatoryNotice,
+                                    'এভিডেন্স আইডি': g.evidenceIds.join(', '),
+                                  },
+                                  `Forensic_Report8_Gap_${g.gapId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Record Gap Item as PDF"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemJson(g, `Forensic_Report8_Gap_${g.gapId}`)
+                              }
+                              className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Record Gap Item as JSON"
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span>JSON</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2050,7 +2761,8 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <th className="p-2.5 border-r border-slate-800">উৎস ক / পূর্ববর্তী রেকর্ড দাবি</th>
                         <th className="p-2.5 border-r border-slate-800">উৎস খ / পরবর্তী রেকর্ড দাবি</th>
                         <th className="p-2.5 border-r border-slate-800">নিরপেক্ষ ফরেনসিক বিশ্লেষণ</th>
-                        <th className="p-2.5">প্রমাণ স্ট্যাটাস</th>
+                        <th className="p-2.5 border-r border-slate-800">প্রমাণ স্ট্যাটাস</th>
+                        <th className="p-2.5 text-center">Download</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
@@ -2071,7 +2783,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           <td className="p-2.5 border-r border-slate-800 text-slate-300">
                             {a.neutralFindingSummary}
                           </td>
-                          <td className="p-2.5">
+                          <td className="p-2.5 border-r border-slate-800">
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeStyle(
                                 a.classification
@@ -2081,6 +2793,46 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                             </span>
                             <div className="text-[10px] font-mono text-slate-400 mt-1">
                               {a.evidenceIds.join(', ')}
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() =>
+                                  handleDownloadSingleItemPdf(
+                                    `Contradiction & Anomaly Sheet (${a.anomalyType})`,
+                                    `${a.anomalyId} | Classification: ${a.classification}`,
+                                    {
+                                      'Anomaly ID': a.anomalyId,
+                                      'অসঙ্গতির ধরন': a.anomalyType,
+                                      'উৎস ক / পূর্ববর্তী দাবি': a.earlierOrSourceA,
+                                      'উৎস খ / পরবর্তী দাবি': a.laterOrSourceB,
+                                      'নিরপেক্ষ ফরেনসিক বিশ্লেষণ': a.neutralFindingSummary,
+                                      'প্রমাণ স্ট্যাটাস': a.classification,
+                                      'এভিডেন্স আইডি': a.evidenceIds.join(', '),
+                                    },
+                                    `Forensic_Report9_Anomaly_${a.anomalyId}`
+                                  )
+                                }
+                                className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                                title="Download Anomaly Sheet as PDF"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>PDF</span>
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDownloadSingleItemJson(
+                                    a,
+                                    `Forensic_Report9_Anomaly_${a.anomalyId}`
+                                  )
+                                }
+                                className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                                title="Download Anomaly Sheet as JSON"
+                              >
+                                <FileSpreadsheet className="w-3 h-3" />
+                                <span>JSON</span>
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2106,9 +2858,45 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <span className="font-mono text-amber-300 font-bold">{cd.evidenceId}</span> ·{' '}
                         <strong className="text-white">{cd.caseNumber}</strong> ({cd.courtName})
                       </div>
-                      <span className="px-2.5 py-1 rounded bg-rose-950/60 border border-rose-500/40 text-rose-200 font-mono font-bold text-[11px]">
-                        {cd.mandatoryLegalSafeguardClassification}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-1 rounded bg-rose-950/60 border border-rose-500/40 text-rose-200 font-mono font-bold text-[11px]">
+                          {cd.mandatoryLegalSafeguardClassification}
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleDownloadSingleItemPdf(
+                              `Court Document Forensic Analysis — ${cd.caseNumber}`,
+                              `${cd.courtDocId} | ${cd.courtName} | ${cd.mandatoryLegalSafeguardClassification}`,
+                              {
+                                'Case Number & Court': `${cd.caseNumber} (${cd.courtName})`,
+                                'Evidence ID': cd.evidenceId,
+                                'A. বাদীর আরজির অভিযোগ': cd.plaintiffAllegations.join(' | '),
+                                'B. বিবাদীর জবাব': cd.defendantStatements.join(' | '),
+                                'C. দালিলিক প্রদর্শনী (Exhibits)': cd.documentaryExhibits.join(' | '),
+                                'D. আদালতের পর্যবেক্ষণ': cd.courtObservations.join(' | '),
+                                'G. চূড়ান্ত রায় / ডিক্রি': cd.finalJudgmentOrDecree,
+                                'আইনি সুরক্ষা নোট': cd.mandatoryLegalSafeguardClassification,
+                              },
+                              `Forensic_CourtDoc_${cd.courtDocId}`
+                            )
+                          }
+                          className="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-[11px] flex items-center gap-1"
+                          title="Download Court Document Analysis as PDF"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Download .PDF</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDownloadSingleItemJson(cd, `Forensic_CourtDoc_${cd.courtDocId}`)
+                          }
+                          className="px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold text-[11px] flex items-center gap-1"
+                          title="Download Court Document Analysis as JSON"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                          <span>.JSON</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2157,7 +2945,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                   REPORT 10 — MASTER LEDGER UPDATE PROPOSAL (STEP 11: অনুমোদন বা প্রত্যাখ্যান এবং রোলব্যাক অডিট ট্রেইল)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  কোনো যাচাইকৃত রেকর্ড স্বয়ংক্রিয়ভাবে ওভাররাইট করা হয় না। প্রতিটি প্রস্তাব পরীক্ষা করে Approve অথবা Reject করুন (Section 14, 16 & 17)
+                  কোনো যাচাইকৃত রেকর্ড স্বয়ংক্রিয়ভাবে ওভাররাইট করা হয় না। প্রতিটি প্রস্তাব পরীক্ষা করে Approve অথবা Reject করুন এবং যেকোনো প্রস্তাব বা লেজার স্ন্যাপশট লোকাল ডিস্কে ডাউনলোড করুন (Section 14, 16 & 17)
                 </p>
               </div>
 
@@ -2200,7 +2988,45 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() =>
+                          handleDownloadSingleItemPdf(
+                            `Master Ledger Update Proposal — ${p.proposedRecord.surveyType} খতিয়ান ${p.proposedRecord.khatianNo}`,
+                            `${p.proposalId} | ${p.evidenceStatus} (${p.approvalState})`,
+                            {
+                              'Proposal ID': p.proposalId,
+                              'জরিপ ও খতিয়ান': `${p.proposedRecord.surveyType} খতিয়ান ${p.proposedRecord.khatianNo}, দাগ ${p.proposedRecord.dagNo}`,
+                              'মৌজা ও JL': `${p.proposedRecord.mouza} (JL ${p.proposedRecord.jlNo})`,
+                              'রেকর্ডীয় মালিকানা':
+                                p.proposedRecord.recordedOwnership || p.proposedRecord.ownerDetails,
+                              'দাবিকৃত/ওয়ারিশ সম্পর্ক': p.proposedRecord.claimedOwnership || '—',
+                              'জমির পরিমাণ': p.proposedRecord.area || '—',
+                              'প্রস্তাবের কারণ ও প্রমাণ': p.reasonAndEvidenceSummary,
+                              'এভিডেন্স আইডি ও স্ট্যাটাস': `${p.evidenceIds.join(', ')} — ${p.approvalState}`,
+                            },
+                            `Forensic_Report10_Proposal_${p.proposalId}`
+                          )
+                        }
+                        className="px-2.5 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-bold text-xs flex items-center gap-1"
+                        title="Download Proposal Document as PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download .PDF</span>
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleDownloadSingleItemJson(
+                            p,
+                            `Forensic_Report10_Proposal_${p.proposalId}`
+                          )
+                        }
+                        className="px-2.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1"
+                        title="Download Proposal Document as JSON"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>.JSON</span>
+                      </button>
                       {p.approvalState === 'PENDING_REVIEW' ? (
                         <>
                           <button
@@ -2229,36 +3055,122 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
               </div>
 
               {/* Rollback & Audit Version History (Section 17) */}
-              <div className="border-t border-slate-800 pt-4 space-y-2.5">
-                <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                  <History className="w-4 h-4" />
-                  <span>মাস্টার লেজার অডিট ট্রেইল ও ভার্সন রোলব্যাক হিস্ট্রি (Section 17 — Data Safety & Rollback)</span>
-                </h4>
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    <span>মাস্টার লেজার স্ন্যাপশট ও ভার্সন রোলব্যাক হিস্ট্রি (Section 17 — Ledger Snapshots & Local Disk Download)</span>
+                  </h4>
+                  {/* Current Live Master Ledger Snapshot Direct Download Bar */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[#090d16] px-2.5 py-1.5 rounded-lg border border-emerald-500/30 text-xs">
+                    <span className="text-emerald-300 font-bold">
+                      বর্তমান সক্রিয় লেজার স্ন্যাপশট ({toBengaliNumber(records.length)}টি রেকর্ড):
+                    </span>
+                    <button
+                      onClick={() =>
+                        handleDownloadLedgerSnapshot(records, 'VER-LIVE-CURRENT', 'pdf')
+                      }
+                      className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[11px] flex items-center gap-1"
+                      title="Download Active Ledger Snapshot as PDF"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download .PDF</span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleDownloadLedgerSnapshot(records, 'VER-LIVE-CURRENT', 'xlsx')
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 font-bold text-[11px] flex items-center gap-1"
+                      title="Download Active Ledger Snapshot as Excel"
+                    >
+                      <FileSpreadsheet className="w-3 h-3" />
+                      <span>.XLSX</span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleDownloadLedgerSnapshot(records, 'VER-LIVE-CURRENT', 'json')
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-[11px] flex items-center gap-1"
+                      title="Download Active Ledger Snapshot as JSON"
+                    >
+                      <FileText className="w-3 h-3" />
+                      <span>.JSON</span>
+                    </button>
+                  </div>
+                </div>
+
                 {versionHistory.length === 0 ? (
                   <p className="text-xs text-slate-400">
-                    এখনো কোনো প্রস্তাব অনুমোদিত হয়নি। কোনো প্রস্তাব অনুমোদন করলে পূর্ববর্তী স্ন্যাপশট এখানে সংরক্ষিত হবে এবং যেকোনো সময় ১-ক্লিকে রোলব্যাক করা যাবে।
+                    এখনো কোনো পূর্ববর্তী সংস্করণ স্ন্যাপশট সংরক্ষিত হয়নি। কোনো প্রস্তাব অনুমোদন করলে পূর্ববর্তী স্ন্যাপশট এখানে সংরক্ষিত হবে এবং যেকোনো সময় লোকাল ডিস্কে ডাউনলোড বা ১-ক্লিকে রোলব্যাক করা যাবে।
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {versionHistory.map((vh) => (
                       <div
                         key={vh.versionId}
-                        className="bg-[#090d16] border border-slate-800 rounded-lg p-3 flex items-center justify-between gap-3 text-xs"
+                        className="bg-[#090d16] border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
                       >
                         <div>
                           <span className="font-mono text-amber-300 font-bold">{vh.versionId}</span>{' '}
-                          · <span className="text-slate-400">{vh.timestamp}</span>
+                          · <span className="text-slate-400">{vh.timestamp}</span> ·{' '}
+                          <span className="text-emerald-300 font-mono">
+                            ({toBengaliNumber(vh.previousRecordsSnapshot.length)}টি রেকর্ড)
+                          </span>
                           <div className="text-slate-200 font-semibold mt-0.5">
                             {vh.actionTitle}
                           </div>
                         </div>
-                        <button
-                          onClick={() => onRollbackLedgerVersion(vh)}
-                          className="px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center gap-1"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>এই সংস্করণে রোলব্যাক করুন</span>
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            onClick={() =>
+                              handleDownloadLedgerSnapshot(
+                                vh.previousRecordsSnapshot,
+                                vh.versionId,
+                                'pdf'
+                              )
+                            }
+                            className="px-2.5 py-1.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs flex items-center gap-1"
+                            title="Download Ledger Snapshot as PDF to local disk"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download .PDF</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleDownloadLedgerSnapshot(
+                                vh.previousRecordsSnapshot,
+                                vh.versionId,
+                                'xlsx'
+                              )
+                            }
+                            className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-bold text-xs flex items-center gap-1"
+                            title="Download Ledger Snapshot as Excel (.xlsx) to local disk"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            <span>.XLSX</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleDownloadLedgerSnapshot(
+                                vh.previousRecordsSnapshot,
+                                vh.versionId,
+                                'json'
+                              )
+                            }
+                            className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center gap-1"
+                            title="Download Ledger Snapshot as JSON to local disk"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>.JSON</span>
+                          </button>
+                          <button
+                            onClick={() => onRollbackLedgerVersion(vh)}
+                            className="px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>এই সংস্করণে রোলব্যাক করুন</span>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2325,7 +3237,8 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                       <th className="p-2.5 border-r border-slate-800">নরমালাইজড ও বিকল্প বানান</th>
                       <th className="p-2.5 border-r border-slate-800">পিতা, মাতা ও স্বামী/স্ত্রী</th>
                       <th className="p-2.5 border-r border-slate-800">বংশধারা সম্পর্ক ও শাখা</th>
-                      <th className="p-2.5">Evidence ID & Status</th>
+                      <th className="p-2.5 border-r border-slate-800">Evidence ID & Status</th>
+                      <th className="p-2.5 text-center">Download</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
@@ -2352,7 +3265,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                         <td className="p-2.5 border-r border-slate-800 text-emerald-300">
                           {g.relationshipLabel}
                         </td>
-                        <td className="p-2.5">
+                        <td className="p-2.5 border-r border-slate-800">
                           <span className="font-mono text-amber-200">
                             {g.evidenceIds.join(', ')}
                           </span>{' '}
@@ -2364,6 +3277,43 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                           >
                             {g.verificationStatus}
                           </span>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemPdf(
+                                  `Genealogy Member Dossier — ${g.originalName}`,
+                                  `${g.personId} | Status: ${g.verificationStatus}`,
+                                  {
+                                    'Person ID ও প্রজন্ম': `${g.personId} (প্রজন্ম ${toBengaliNumber(g.generation)})`,
+                                    'মূল নাম (Original Name)': g.originalName,
+                                    'নরমালাইজড ও বিকল্প বানান': `${g.normalizedName} (${g.variantSpellings.join(', ')})`,
+                                    'পিতার নাম': g.fatherOriginalName,
+                                    'মাতা ও স্বামী/স্ত্রী': `মাতা: ${g.motherName} | স্ত্রী/স্বামী: ${g.spouseNames.join(', ') || '—'}`,
+                                    'বংশধারা সম্পর্ক ও শাখা': g.relationshipLabel,
+                                    'এভিডেন্স আইডি ও স্ট্যাটাস': `${g.evidenceIds.join(', ')} (${g.verificationStatus})`,
+                                  },
+                                  `Forensic_Genealogy_${g.personId}`
+                                )
+                              }
+                              className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Genealogy Member Dossier as PDF"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDownloadSingleItemJson(g, `Forensic_Genealogy_${g.personId}`)
+                              }
+                              className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Download Genealogy Member Dossier as JSON"
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span>JSON</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2381,7 +3331,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                   AUTOMATED FORENSIC VERIFICATION TEST SUITE (TEST A – TEST J — Section 19)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  মাস্টার প্রম্পটের ১০টি বাধ্যতামূলক টেস্ট কেস (TEST A থেকে TEST J) লাইভ ফরেনসিক ইঞ্জিনে যাচাইকৃত ফলাফল
+                  মাস্টার প্রম্পটের ১০টি বাধ্যতামূলক টেস্ট কেস (TEST A থেকে TEST J) লাইভ ফরেনসিক ইঞ্জিনে যাচাইকৃত ফলাফল — প্রতিটি টেস্ট কেস সার্টিফিকেট লোকাল ডিস্কে ডাউনলোডযোগ্য
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2390,14 +3340,51 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                     key={tr.testCode}
                     className="bg-[#0b101d] border border-emerald-500/30 rounded-xl p-3.5 space-y-1.5 text-xs"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-mono font-bold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
                         {tr.testCode}: {tr.title}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[11px] flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>PASSED</span>
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[11px] flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>PASSED</span>
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleDownloadSingleItemPdf(
+                              `Forensic Verification Test Report — ${tr.testCode}: ${tr.title}`,
+                              `${tr.testCode} | PASSED | Evidence: ${tr.evidenceIds.join(', ')}`,
+                              {
+                                'Test Code & Title': `${tr.testCode}: ${tr.title}`,
+                                'দৃশ্যপট (Scenario)': tr.scenarioDescription,
+                                'স্যাম্পল ইনপুট': tr.sampleInputSummary,
+                                'প্রাপ্ত ফলাফল': tr.actualClassification,
+                                'বিস্তারিত আউটপুট': tr.detailedOutput,
+                                'এভিডেন্স আইডি ও স্ট্যাটাস': `${tr.evidenceIds.join(', ')} [${tr.evidenceStatus}]`,
+                              },
+                              `Forensic_Test_${tr.testCode.replace(/\s+/g, '_')}`
+                            )
+                          }
+                          className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1"
+                          title="Download Test Certificate as PDF"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>PDF</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDownloadSingleItemJson(
+                              tr,
+                              `Forensic_Test_${tr.testCode.replace(/\s+/g, '_')}`
+                            )
+                          }
+                          className="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1"
+                          title="Download Test Certificate as JSON"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                          <span>JSON</span>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-slate-300 text-[11px]">{tr.scenarioDescription}</p>
                     <div className="bg-[#121827] p-2 rounded border border-slate-800 text-[11px] text-slate-200 font-mono">

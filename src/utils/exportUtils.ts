@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { DynamicColumn, LandRecord } from '../types/landRecord';
+import { DynamicColumn, IngestedArchiveNode, LandRecord } from '../types/landRecord';
+import { WarishCertificate } from './inheritanceData';
 import { parseAcreValue, toBengaliNumber } from './bengaliNumerals';
 
 export function exportToExcel(
@@ -102,4 +103,125 @@ export function exportToCSV(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export function exportToJSON(data: unknown, fileName = 'LR_Document_Export') {
+  const jsonContent = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${fileName}_${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function exportGenericTableToExcel(
+  headers: { key: string; label: string }[],
+  rows: Record<string, string>[],
+  fileName: string,
+  sheetName = 'Document_Sheet'
+) {
+  const formattedRows = rows.map((r) => {
+    const obj: Record<string, string> = {};
+    headers.forEach((h) => {
+      obj[h.label] = r[h.key] || '—';
+    });
+    return obj;
+  });
+  const ws = XLSX.utils.json_to_sheet(formattedRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+export function exportGenericTableToCSV(
+  headers: { key: string; label: string }[],
+  rows: Record<string, string>[],
+  fileName: string
+) {
+  const headerLine = headers.map((h) => `"${h.label.replace(/"/g, '""')}"`).join(',');
+  const bodyLines = rows.map((r) =>
+    headers.map((h) => `"${String(r[h.key] || '').replace(/"/g, '""')}"`).join(',')
+  );
+  const csv = '\uFEFF' + [headerLine, ...bodyLines].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${fileName}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export function exportWarishCertificatesToExcel(
+  certificates: WarishCertificate[],
+  fileName = 'LR_Warish_Certificates_Directory'
+) {
+  const rows: Record<string, string>[] = [];
+  certificates.forEach((cert) => {
+    cert.heirs.forEach((heir) => {
+      rows.push({
+        'সনদ ক্রমিক': toBengaliNumber(cert.slNo),
+        'ওয়ারিশ সনদ নং': cert.certificateNo,
+        'ইস্যুর তারিখ': cert.issueDate,
+        'মৃত পূর্বপুরুষের নাম': cert.deceasedName,
+        'পিতার নাম': cert.fatherName,
+        'মাতার নাম': cert.motherName,
+        'গ্রাম/মৌজা': `${cert.village} (${cert.union}, ${cert.upazila}, ${cert.district})`,
+        'ওয়ারিশ ক্রমিক': heir.sl,
+        'ওয়ারিশের নাম': heir.name,
+        'মৃতের সাথে সম্পর্ক': heir.relation,
+        'জন্ম তারিখ': heir.dob,
+        'বর্তমান অবস্থা': heir.status,
+      });
+    });
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ওয়ারিশ সনদ তালিকা');
+  XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+export function flattenArchiveTreeRows(
+  node: IngestedArchiveNode | null,
+  records: LandRecord[]
+): Record<string, string>[] {
+  if (!node) return [];
+  const rows: Record<string, string>[] = [];
+  const walk = (n: IngestedArchiveNode, depth: number) => {
+    const isFolder = n.type === 'folder' || (n.children && n.children.length > 0);
+    const matched = !isFolder
+      ? records.find(
+          (r) =>
+            r.relativePath === n.path ||
+            r.fileName === n.name ||
+            n.path.endsWith(r.fileName || '___')
+        )
+      : undefined;
+
+    rows.push({
+      slNo: toBengaliNumber(rows.length + 1),
+      nodeType: isFolder ? 'ফোল্ডার (Folder)' : 'ফাইল (File)',
+      name: `${'  '.repeat(depth)}${n.name}`,
+      relativePath: n.path || n.name,
+      fileSize: n.size ? `${(n.size / 1024).toFixed(1)} KB` : '—',
+      mouzaAndJl: matched ? `${matched.mouza} (JL ${matched.jlNo})` : '—',
+      surveyKhatianDag: matched
+        ? `${matched.surveyType} | খতিয়ান ${matched.khatianNo} | দাগ ${matched.dagNo}`
+        : '—',
+      ownerAndArea: matched ? `${matched.ownerDetails} (${matched.area})` : '—',
+    });
+
+    if (n.children) {
+      n.children.forEach((child) => walk(child, depth + 1));
+    }
+  };
+  walk(node, 0);
+  return rows;
 }
