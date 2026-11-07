@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Building2,
   Download,
+  Users,
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
 
@@ -19,8 +20,8 @@ interface HeaderProps {
   totalRecords: number;
   filteredCount: number;
   selectedCount: number;
-  activeView: 'ledger' | 'print' | 'tree';
-  setActiveView: (view: 'ledger' | 'print' | 'tree') => void;
+  activeView: 'ledger' | 'print' | 'tree' | 'inheritance';
+  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance') => void;
   onOpenIngest: () => void;
   onOpenColumnCustomizer: () => void;
   onExportExcel: () => void;
@@ -50,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [showPdfMenu, setShowPdfMenu] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0c111e]/95 backdrop-blur border-b border-amber-500/20 px-3 sm:px-6 lg:px-8 py-3 transition-colors">
+    <header className="sticky top-0 z-40 bg-[#0c111e]/95 backdrop-blur border-b border-amber-500/20 px-3 sm:px-6 lg:px-8 py-3 transition-colors no-print">
       <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-3">
         {/* Zone 1: Wordmark / Brand Title */}
         <div className="flex items-center gap-3">
@@ -91,6 +92,17 @@ export const Header: React.FC<HeaderProps> = ({
             মাস্টার লেজার গ্রিড
           </button>
           <button
+            onClick={() => setActiveView('inheritance')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
+              activeView === 'inheritance'
+                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-500/50 shadow-sm'
+                : 'text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/40'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-400" />
+            <span>ওয়ারিশ ম্যাচিং ও নতুন তালিকা</span>
+          </button>
+          <button
             onClick={() => setActiveView('tree')}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
               activeView === 'tree'
@@ -114,6 +126,16 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: Primary Actions with High-Visibility Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Warish Matched List Button (visible on all screen sizes) */}
+          <button
+            onClick={() => setActiveView('inheritance')}
+            title="ওয়ারিশ সনদের সাথে ম্যাচকৃত নতুন তালিকা"
+            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-emerald-200 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">ওয়ারিশ ম্যাচ তালিকা</span>
+          </button>
+
           {/* APK Download Button */}
           <button
             onClick={onOpenApkModal}

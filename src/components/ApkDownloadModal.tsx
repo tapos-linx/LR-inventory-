@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Download,
   Smartphone,
@@ -6,16 +6,21 @@ import {
   CheckCircle2,
   X,
   ExternalLink,
-  Shield,
   Copy,
   Check,
   GitBranch,
   Terminal,
   Sparkles,
   FileCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { usePWAInstall } from '../utils/usePWAInstall';
 import { LandRecord } from '../types/landRecord';
+import {
+  fetchLatestGitHubRelease,
+  GitHubReleaseInfo,
+  REPOSITORY_CONFIG,
+} from '../config/repository';
 
 interface ApkDownloadModalProps {
   isOpen: boolean;
@@ -28,25 +33,50 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({
   onClose,
   records = [],
 }) => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [repoUrl, setRepoUrl] = useState(
-    'https://github.com/tapos-cpl/lr-master-ledger-studio'
-  );
+  const { isInstallable, isInstalled, install } = usePWAInstall();
+  const [repoUrl, setRepoUrl] = useState(REPOSITORY_CONFIG.repoUrl);
+  const [releaseInfo, setReleaseInfo] = useState<GitHubReleaseInfo>({
+    tagName: REPOSITORY_CONFIG.currentVersion,
+    name: `${REPOSITORY_CONFIG.appName} (${REPOSITORY_CONFIG.currentVersion})`,
+    publishedAt: new Date().toISOString(),
+    htmlUrl: REPOSITORY_CONFIG.releasesUrl,
+    body: '',
+    apkDownloadUrl: REPOSITORY_CONFIG.fallbackApkDownloadUrl,
+    apkFileName: REPOSITORY_CONFIG.defaultApkFileName,
+    isLiveFromGitHub: false,
+  });
+  const [isLoadingRelease, setIsLoadingRelease] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedGitCmd, setCopiedGitCmd] = useState(false);
   const [installFeedback, setInstallFeedback] = useState<string | null>(null);
 
+  const loadReleaseFromGitHub = async (targetUrl?: string) => {
+    setIsLoadingRelease(true);
+    try {
+      const info = await fetchLatestGitHubRelease(targetUrl ?? repoUrl);
+      setReleaseInfo(info);
+    } finally {
+      setIsLoadingRelease(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadReleaseFromGitHub(repoUrl);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const cleanRepoUrl = repoUrl.replace(/\/+$/, '');
-  const downloadApkUrl = `${cleanRepoUrl}/releases/latest/download/LR_Master_Ledger_v2.0.apk`;
-  const releasesPageUrl = `${cleanRepoUrl}/releases/latest`;
+  const downloadApkUrl = releaseInfo.apkDownloadUrl;
+  const releasesPageUrl = releaseInfo.htmlUrl || `${cleanRepoUrl}/releases/latest`;
   const actionsPageUrl = `${cleanRepoUrl}/actions`;
 
   const gitSyncCommands = `git init
 git remote add origin ${cleanRepoUrl}.git || git remote set-url origin ${cleanRepoUrl}.git
 git add .
-git commit -m "feat: add GitHub Actions Android APK builder, PWA WebAPK installer, and Mouza PDF engine"
+git commit -m "feat: add Warish inheritance matcher, repository config, and Mouza PDF engine"
 git branch -M main
 git push -u origin main`;
 
@@ -75,7 +105,6 @@ git push -u origin main`;
     }
   };
 
-  // Generates a real, 100% working standalone offline mobile app file (.html) with built-in folder upload & Mouza PDF printer
   const handleDownloadStandaloneOfflineApp = () => {
     const initialDataJson = JSON.stringify(records);
     const standaloneAppHtml = `<!DOCTYPE html>
@@ -83,7 +112,7 @@ git push -u origin main`;
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LR Master Ledger Studio — Offline Mobile App</title>
+  <title>${REPOSITORY_CONFIG.appName} — Offline Mobile App</title>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; }
@@ -111,8 +140,8 @@ git push -u origin main`;
 <body>
   <header class="no-print">
     <div>
-      <div class="brand">ভূমি রেকর্ড মাস্টার লেজার (Offline Mobile App v2.0)</div>
-      <div style="font-size:12px;color:#94a3b8;">ফোন মেমোরি ফোল্ডার আপলোড ও মৌজাভিত্তিক পৃথক A4 PDF জেনারেটর</div>
+      <div class="brand">ভূমি রেকর্ড মাস্টার লেজার (${releaseInfo.tagName})</div>
+      <div style="font-size:12px;color:#94a3b8;">ফোন মেমোরি ফোল্ডার আপলোড, ওয়ারিশ ম্যাচিং ও মৌজাভিত্তিক পৃথক A4 PDF জেনারেটর</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <label class="btn">
@@ -257,7 +286,7 @@ git push -u origin main`;
                 ফোনে অ্যাপ ইনস্টল ও GitHub অফিসিয়াল .APK ডাউনলোড সেন্টার
               </h2>
               <p className="text-xs text-slate-400 font-sans">
-                Direct Android WebAPK Installer & GitHub Releases (.apk)
+                {REPOSITORY_CONFIG.packageId} · Latest Release ({releaseInfo.tagName})
               </p>
             </div>
           </div>
@@ -324,23 +353,43 @@ git push -u origin main`;
             )}
           </div>
 
-          {/* Option 2: Direct GitHub Repository .APK Binary Download Link */}
+          {/* Option 2: Direct GitHub Repository .APK Binary Download Link (Live from releases/latest) */}
           <div className="bg-gradient-to-br from-[#162136] to-[#0d1320] border border-amber-500/30 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Github className="w-5 h-5 text-amber-400" />
                 <span className="font-bold text-white text-sm">
-                  পদ্ধতি ২: GitHub Repository থেকে সরাসরি .APK ফাইল ডাউনলোড করুন
+                  পদ্ধতি ২: GitHub Releases থেকে সরাসরি সর্বশেষ .APK ডাউনলোড
                 </span>
               </div>
-              <span className="text-[11px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
-                LR_Master_Ledger_v2.0.apk
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
+                  {releaseInfo.apkFileName} ({releaseInfo.tagName})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => loadReleaseFromGitHub(repoUrl)}
+                  title="GitHub API থেকে সর্বশেষ ভার্সন যাচাই করুন"
+                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRelease ? 'animate-spin text-amber-400' : ''}`} />
+                </button>
+              </div>
             </div>
 
-            <p className="text-slate-300 leading-relaxed">
-              আমাদের প্রজেক্টে <code className="text-amber-300 font-mono">.github/workflows/build-apk.yml</code> স্বয়ংক্রিয় APK বিল্ডার যুক্ত করা হয়েছে। গিটহাব রিলিজ পেজ থেকে সরাসরি ইনস্টলযোগ্য <strong className="text-white">LR_Master_Ledger_v2.0.apk</strong> ফাইলটি আপনার ফোন মেমোরিতে ডাউনলোড করুন:
-            </p>
+            <div className="text-slate-300 leading-relaxed flex flex-wrap items-center justify-between gap-2">
+              <span>
+                রিলিজ নাম: <strong className="text-white">{releaseInfo.name}</strong>
+                {releaseInfo.apkSizeBytes
+                  ? ` · সাইজ: ${(releaseInfo.apkSizeBytes / (1024 * 1024)).toFixed(2)} MB`
+                  : ''}
+              </span>
+              <span className="text-[11px] text-emerald-400 font-mono">
+                {releaseInfo.isLiveFromGitHub
+                  ? '● Live from GitHub API (releases/latest)'
+                  : '● Configured via src/config/repository.ts'}
+              </span>
+            </div>
 
             {/* Real Anchor Links to GitHub Release APK & Releases Page */}
             <div className="pt-1 flex flex-col sm:flex-row gap-2">
@@ -351,7 +400,7 @@ git push -u origin main`;
                 className="flex-1 py-2.5 px-4 text-xs sm:text-sm font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 rounded-lg shadow-lg shadow-amber-950/40 flex items-center justify-center gap-2 transition-all text-center"
               >
                 <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                <span>GitHub থেকে সরাসরি .APK ডাউনলোড করুন</span>
+                <span>GitHub থেকে সরাসরি {releaseInfo.apkFileName} ডাউনলোড</span>
               </a>
 
               <a
@@ -375,8 +424,8 @@ git push -u origin main`;
               </button>
             </div>
 
-            <div className="bg-[#090d16] border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-amber-300 break-all flex items-center justify-between gap-2">
-              <span>{downloadApkUrl}</span>
+            <div className="bg-[#090d16] border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] text-amber-300 break-all">
+              {downloadApkUrl}
             </div>
           </div>
 
@@ -435,6 +484,7 @@ git push -u origin main`;
                 type="text"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
+                onBlur={() => loadReleaseFromGitHub(repoUrl)}
                 className="flex-1 bg-[#090d16] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-amber-400"
               />
             </div>
@@ -464,7 +514,7 @@ git push -u origin main`;
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-800 bg-[#141b2c] flex justify-between items-center">
           <span className="text-[11px] text-slate-400">
-            কোনো টেক্সট/JSON ফাইল নয় — সরাসরি ইনস্টলযোগ্য অ্যাপ ও GitHub .APK রিলিজ
+            Centralized in src/config/repository.ts · Live GitHub releases/latest sync
           </span>
           <button
             onClick={onClose}

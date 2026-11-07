@@ -17,6 +17,8 @@ import {
   FileArchive,
   Loader2,
   RotateCcw,
+  Users,
+  FileCheck2,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { HierarchyExplorer } from './components/HierarchyExplorer';
@@ -27,6 +29,13 @@ import { RecordDetailModal } from './components/RecordDetailModal';
 import { PrintReportView } from './components/PrintReportView';
 import { ArchiveTreeView } from './components/ArchiveTreeView';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
+import { InheritanceMatcherView } from './components/InheritanceMatcherView';
+import { REPOSITORY_CONFIG } from './config/repository';
+import {
+  PROVIDED_WARISH_CERTIFICATES,
+  matchLandRecordsWithInheritance,
+  convertMatchedListToLandRecords,
+} from './utils/inheritanceData';
 import {
   DynamicColumn,
   IngestedArchiveNode,
@@ -78,7 +87,7 @@ export default function App() {
 
   // Selection & Views
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeView, setActiveView] = useState<'ledger' | 'print' | 'tree'>('ledger');
+  const [activeView, setActiveView] = useState<'ledger' | 'print' | 'tree' | 'inheritance'>('ledger');
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
   const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
 
@@ -368,6 +377,67 @@ export default function App() {
     setSearchQuery('');
   };
 
+  // Apply the new matched list (Land Records + Matched Warish Certificate Data) to the Master Ledger
+  const handleApplyMatchedListToLedger = (
+    matchedRecords: LandRecord[],
+    openPrintAfter = false
+  ) => {
+    if (matchedRecords.length === 0) return;
+
+    setRecords(matchedRecords);
+    setSelectedIds(new Set());
+    setSelectedDistrict('');
+    setSelectedUpazila('');
+    setSelectedMouza('');
+
+    // Ensure Warish Certificate extra columns are visible in the Master Ledger & PDF Report
+    const warishExtraKeys = [
+      'ওয়ারিশ সনদ নং',
+      'মৃত পূর্বসূরি',
+      'জীবিত ওয়ারিশ সংখ্যা',
+      'ওয়ারিশ প্রতি গড় অংশ',
+    ];
+
+    setColumns((prevCols) => {
+      const existingIds = new Set(prevCols.map((c) => c.id));
+      const addedCols: DynamicColumn[] = warishExtraKeys
+        .filter((k) => !existingIds.has(k))
+        .map((k, idx) => ({
+          id: k,
+          label: k,
+          visible: true,
+          order: prevCols.length + idx + 1,
+          type: 'text',
+          isExtra: true,
+        }));
+      return [...prevCols, ...addedCols];
+    });
+
+    if (openPrintAfter) {
+      setPrintUpazilaScope('');
+      setPrintMouzaScope('');
+      setActiveView('print');
+    } else {
+      setQuickUploadMsg(
+        `ওয়ারিশ সনদের তালিকার সাথে ম্যাচকৃত নতুন ${toBengaliNumber(
+          matchedRecords.length
+        )} টি রেকর্ড মাস্টার লেজারে লোড হয়েছে!`
+      );
+      setTimeout(() => setQuickUploadMsg(null), 8000);
+    }
+  };
+
+  // 1-Click Instant Match & Load from Home Screen
+  const handleInstantMatchAndLoad = (strictOnly: boolean) => {
+    const matched = matchLandRecordsWithInheritance(
+      records,
+      PROVIDED_WARISH_CERTIFICATES,
+      strictOnly
+    );
+    const enriched = convertMatchedListToLandRecords(matched);
+    handleApplyMatchedListToLedger(enriched, false);
+  };
+
   // Target records for Print View: Ensure 100% of uploaded records are available!
   const printTargetRecords =
     selectedIds.size > 0
@@ -402,6 +472,13 @@ export default function App() {
           onBack={() => setActiveView('ledger')}
           initialSelectedUpazila={printUpazilaScope}
           initialSelectedMouza={printMouzaScope}
+        />
+      ) : activeView === 'inheritance' ? (
+        <InheritanceMatcherView
+          records={records}
+          columns={columns}
+          onBack={() => setActiveView('ledger')}
+          onApplyMatchedListToLedger={handleApplyMatchedListToLedger}
         />
       ) : (
         <main className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col space-y-4">
@@ -492,6 +569,52 @@ export default function App() {
                 )}
               </div>
             )}
+          </section>
+
+          {/* Inheritance (Warish Certificate) Matching & New Matched List Hub */}
+          <section className="bg-gradient-to-r from-[#0e221d] via-[#122624] to-[#11192a] border border-emerald-500/40 rounded-xl p-3.5 sm:p-4 shadow-lg font-bengali">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                    <span>সংযুক্ত ওয়ারিশ সনদের তালিকা ও খতিয়ান ম্যাচকৃত নতুন তালিকা (Inheritance List Matcher)</span>
+                    <span className="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded">
+                      ৬টি ওয়ারিশ সনদ · ৪৯ জন ওয়ারিশ (গ্রাম: গোয়ালী, নবীনগর)
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-300">
+                    আপনার সংযুক্ত ৬টি ওয়ারিশ সনদের (মৃত ফিরুজ মিয়া, সফর আলী, সিরাজ আলী, মোঃ জাহের মিয়া, আব্দুল কাদির ও নোয়াব মিয়া) সাথে তৈরিকৃত খতিয়ান-দাগ তালিকা মিলিয়ে নতুন ম্যাচকৃত তালিকা তৈরি ও প্রিন্ট করুন।
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setActiveView('inheritance')}
+                  className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
+                >
+                  <FileCheck2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>ওয়ারিশ ম্যাচকৃত নতুন তালিকা দেখুন ({toBengaliNumber(records.length)} টি)</span>
+                </button>
+
+                <button
+                  onClick={() => handleInstantMatchAndLoad(false)}
+                  className="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-semibold transition-colors"
+                >
+                  ১-ক্লিকে সকল রেকর্ড ওয়ারিশসহ লেজারে যুক্ত করুন
+                </button>
+
+                <button
+                  onClick={() => handleInstantMatchAndLoad(true)}
+                  className="px-3 py-2 rounded-lg bg-[#162336] hover:bg-[#1e304a] border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
+                >
+                  শুধু গোয়ালী মৌজার ওয়ারিশ ম্যাচ লোড করুন
+                </button>
+              </div>
+            </div>
           </section>
 
           {/* Top Metric Cards */}
@@ -628,7 +751,7 @@ export default function App() {
                 </button>
 
                 <a
-                  href="https://github.com/tapos-cpl/lr-master-ledger-studio/releases/latest/download/LR_Master_Ledger_v2.0.apk"
+                  href={REPOSITORY_CONFIG.fallbackApkDownloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-2 text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
