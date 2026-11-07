@@ -13,6 +13,7 @@ import {
   Building2,
   Download,
   Users,
+  Fingerprint,
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
 
@@ -20,8 +21,8 @@ interface HeaderProps {
   totalRecords: number;
   filteredCount: number;
   selectedCount: number;
-  activeView: 'ledger' | 'print' | 'tree' | 'inheritance';
-  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance') => void;
+  activeView: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic';
+  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic') => void;
   onOpenIngest: () => void;
   onOpenColumnCustomizer: () => void;
   onExportExcel: () => void;
@@ -83,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
         <nav className="hidden xl:flex items-center gap-1 p-1 bg-[#141b2c] border border-amber-500/20 rounded-lg">
           <button
             onClick={() => setActiveView('ledger')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
               activeView === 'ledger'
                 ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -92,19 +93,30 @@ export const Header: React.FC<HeaderProps> = ({
             মাস্টার লেজার গ্রিড
           </button>
           <button
+            onClick={() => setActiveView('forensic')}
+            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
+              activeView === 'forensic'
+                ? 'bg-amber-400 text-slate-950 border border-amber-300 shadow-sm'
+                : 'text-amber-300 hover:text-amber-200 hover:bg-amber-950/40'
+            }`}
+          >
+            <Fingerprint className="w-3.5 h-3.5" />
+            <span>ফরেনসিক ম্যাচিং ও রেকর্ড অডিট</span>
+          </button>
+          <button
             onClick={() => setActiveView('inheritance')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
               activeView === 'inheritance'
                 ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-500/50 shadow-sm'
                 : 'text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/40'
             }`}
           >
             <Users className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ওয়ারিশ ম্যাচিং ও নতুন তালিকা</span>
+            <span>ওয়ারিশ ম্যাচিং তালিকা</span>
           </button>
           <button
             onClick={() => setActiveView('tree')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
               activeView === 'tree'
                 ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -114,18 +126,28 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={() => setActiveView('print')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
               activeView === 'print'
                 ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
             }`}
           >
-            উপজেলা ও মৌজাভিত্তিক A4 PDF রিপোর্ট
+            মৌজাভিত্তিক A4 PDF রিপোর্ট
           </button>
         </nav>
 
         {/* Zone 3: Primary Actions with High-Visibility Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Forensic Audit Quick Button (visible on mobile/tablet) */}
+          <button
+            onClick={() => setActiveView('forensic')}
+            title="FORENSIC MATCHING & LAND RECORD AUDIT"
+            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-amber-200 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/50 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
+          >
+            <Fingerprint className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">ফরেনসিক অডিট</span>
+          </button>
+
           {/* Warish Matched List Button (visible on all screen sizes) */}
           <button
             onClick={() => setActiveView('inheritance')}

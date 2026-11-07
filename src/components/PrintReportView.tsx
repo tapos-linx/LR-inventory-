@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   CheckSquare,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
 import {
@@ -17,6 +18,7 @@ import {
   toBengaliNumber,
 } from '../utils/bengaliNumerals';
 import { exportToExcel } from '../utils/exportUtils';
+import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface PrintReportViewProps {
   records: LandRecord[];
@@ -37,6 +39,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
   const [selectedMouza, setSelectedMouza] = useState<string>(initialSelectedMouza);
   const [pageBreakPerMouza, setPageBreakPerMouza] = useState<boolean>(true);
   const [showMouzaSummaryIndex, setShowMouzaSummaryIndex] = useState<boolean>(true);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
   useEffect(() => {
     setSelectedUpazila(initialSelectedUpazila);
@@ -114,6 +117,17 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDirectDownloadPdf = async () => {
+    if (activeRecords.length === 0 || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      const scope = selectedMouza || selectedUpazila || 'All_Mouzas';
+      await downloadMouzaLandRecordsPdf(activeRecords, columns, scope);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handlePrintSingleMouza = (upz: string, mouz: string) => {
@@ -287,15 +301,30 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
             </button>
 
             <button
+              onClick={handleDirectDownloadPdf}
+              disabled={isGeneratingPdf || activeRecords.length === 0}
+              className="px-4 py-2 text-xs sm:text-sm font-bold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 disabled:opacity-50 rounded-lg shadow-lg flex items-center gap-2 transition-all"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+              ) : (
+                <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+              )}
+              <span>
+                {isGeneratingPdf
+                  ? 'PDF তৈরি হচ্ছে...'
+                  : selectedMouza
+                  ? `${selectedMouza} মৌজার .PDF ডাউনলোড`
+                  : 'সরাসরি .PDF ফাইল ডাউনলোড'}
+              </span>
+            </button>
+
+            <button
               onClick={handlePrint}
               className="px-4 py-2 text-xs sm:text-sm font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 active:scale-[0.98] rounded-lg shadow-lg shadow-amber-950/40 flex items-center gap-2 transition-all"
             >
               <Printer className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-              <span>
-                {selectedMouza
-                  ? `${selectedMouza} মৌজার PDF প্রিন্ট / Save`
-                  : 'মৌজাভিত্তিক মাস্টার PDF প্রিন্ট / Save'}
-              </span>
+              <span>প্রিন্ট / Save as PDF</span>
             </button>
           </div>
         </div>

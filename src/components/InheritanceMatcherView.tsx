@@ -12,6 +12,7 @@ import {
   Layers,
   UserCheck,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
 import {
@@ -22,6 +23,7 @@ import {
 } from '../utils/inheritanceData';
 import { toBengaliNumber, parseAcreValue } from '../utils/bengaliNumerals';
 import { exportToExcel } from '../utils/exportUtils';
+import { downloadMatchedInheritancePdf } from '../utils/pdfDownloadEngine';
 
 interface InheritanceMatcherViewProps {
   records: LandRecord[];
@@ -42,6 +44,7 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
   const [showRawReferenceModal, setShowRawReferenceModal] = useState<boolean>(false);
   const [rawReferenceText, setRawReferenceText] = useState<string>('');
   const [appliedBanner, setAppliedBanner] = useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   // Load the attached reference txt file from /assets/aistudio/____________________a9904dbe.txt
   useEffect(() => {
@@ -146,6 +149,25 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
     exportToExcel(enriched, exportCols, 'LR_Warish_Matched_New_List');
   };
 
+  const handleDownloadDirectPdf = async () => {
+    if (filteredMatchedList.length === 0 || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      const certSuffix =
+        selectedCertId !== 'all' ? `_Cert_${selectedCertId}` : '_All_6_Certs';
+      await downloadMatchedInheritancePdf(
+        filteredMatchedList,
+        `LR_Warish_Matched_New_List${certSuffix}`
+      );
+      setAppliedBanner(
+        `সফলভাবে ${toBengaliNumber(filteredMatchedList.length)} টি ম্যাচকৃত ওয়ারিশ-খতিয়ান রেকর্ডের PDF ফাইল ডাউনলোড হয়েছে!`
+      );
+      setTimeout(() => setAppliedBanner(null), 6000);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handlePrintMatchedReport = () => {
     window.print();
   };
@@ -176,12 +198,22 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Primary 1-Click Direct PDF File Download Button */}
             <button
-              onClick={() => setShowRawReferenceModal(!showRawReferenceModal)}
-              className="px-3 py-2 text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg flex items-center gap-1.5 transition-colors"
+              onClick={handleDownloadDirectPdf}
+              disabled={isDownloadingPdf || filteredMatchedList.length === 0}
+              className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 disabled:opacity-50 rounded-lg shadow-lg shadow-amber-950/50 flex items-center gap-1.5 transition-all"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span>সংযুক্ত ওয়ারিশ সনদ রেফারেন্স ({toBengaliNumber(6)} টি)</span>
+              {isDownloadingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+              ) : (
+                <Download className="w-4 h-4 stroke-[2.5] text-slate-950" />
+              )}
+              <span>
+                {isDownloadingPdf
+                  ? 'PDF তৈরি হচ্ছে...'
+                  : 'ম্যাচকৃত নতুন তালিকা PDF ডাউনলোড (.pdf)'}
+              </span>
             </button>
 
             <button
@@ -189,15 +221,15 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
               className="px-3.5 py-2 text-xs font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-md flex items-center gap-1.5 transition-all"
             >
               <Layers className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>নতুন ম্যাচকৃত তালিকা মাস্টার লেজারে লোড করুন</span>
+              <span>মাস্টার লেজারে লোড করুন</span>
             </button>
 
             <button
               onClick={() => handleLoadIntoLedger(true)}
-              className="px-3.5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-lg shadow-md flex items-center gap-1.5 transition-all"
+              className="px-3 py-2 text-xs font-semibold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-lg flex items-center gap-1.5 transition-all"
             >
-              <Printer className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>মৌজাভিত্তিক ম্যাচকৃত PDF রিপোর্ট</span>
+              <Printer className="w-3.5 h-3.5 text-amber-400" />
+              <span>মৌজাভিত্তিক প্রিন্ট ভিউ</span>
             </button>
 
             <button
@@ -205,7 +237,7 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
               className="px-3 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center gap-1.5 transition-colors"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>এই ম্যাচকৃত টেবিল সরাসরি প্রিন্ট / PDF</span>
+              <span>প্রিন্ট</span>
             </button>
 
             <button
@@ -214,6 +246,14 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>এক্সেল (.xlsx)</span>
+            </button>
+
+            <button
+              onClick={() => setShowRawReferenceModal(!showRawReferenceModal)}
+              className="px-3 py-2 text-xs font-semibold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span>মূল সনদ (.txt)</span>
             </button>
           </div>
         </div>
@@ -411,16 +451,31 @@ export const InheritanceMatcherView: React.FC<InheritanceMatcherViewProps> = ({
               </p>
             </div>
 
-            <div className="text-right text-xs text-slate-300 print:text-black space-y-0.5">
-              <div className="font-semibold text-amber-300 print:text-black">
-                মোট সনদ: {toBengaliNumber(6)} টি | মোট ওয়ারিশ: {toBengaliNumber(totalHeirsCount)} জন
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-right text-xs text-slate-300 print:text-black space-y-0.5">
+                <div className="font-semibold text-amber-300 print:text-black">
+                  মোট সনদ: {toBengaliNumber(6)} টি | মোট ওয়ারিশ: {toBengaliNumber(totalHeirsCount)} জন
+                </div>
+                <div>
+                  তালিকাভুক্ত ম্যাচকৃত রেকর্ড: {toBengaliNumber(filteredMatchedList.length)} টি
+                </div>
+                <div>
+                  সর্বমোট জমি: {toBengaliNumber(totalMatchedAcre.toFixed(4))} একর
+                </div>
               </div>
-              <div>
-                তালিকাভুক্ত ম্যাচকৃত রেকর্ড: {toBengaliNumber(filteredMatchedList.length)} টি
-              </div>
-              <div>
-                সর্বমোট জমি: {toBengaliNumber(totalMatchedAcre.toFixed(4))} একর
-              </div>
+
+              <button
+                onClick={handleDownloadDirectPdf}
+                disabled={isDownloadingPdf || filteredMatchedList.length === 0}
+                className="no-print px-4 py-2.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 rounded-xl shadow-lg flex items-center gap-2 transition-all"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                ) : (
+                  <Download className="w-4 h-4 stroke-[2.5] text-slate-950" />
+                )}
+                <span>নতুন ম্যাচকৃত তালিকা PDF ডাউনলোড (.pdf)</span>
+              </button>
             </div>
           </div>
 

@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Users,
   FileCheck2,
+  Fingerprint,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { HierarchyExplorer } from './components/HierarchyExplorer';
@@ -30,12 +31,15 @@ import { PrintReportView } from './components/PrintReportView';
 import { ArchiveTreeView } from './components/ArchiveTreeView';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
 import { InheritanceMatcherView } from './components/InheritanceMatcherView';
+import { ForensicAuditView } from './components/ForensicAuditView';
 import { REPOSITORY_CONFIG } from './config/repository';
+import { LedgerAuditVersionEntry } from './types/forensic';
 import {
   PROVIDED_WARISH_CERTIFICATES,
   matchLandRecordsWithInheritance,
   convertMatchedListToLandRecords,
 } from './utils/inheritanceData';
+import { downloadMatchedInheritancePdf } from './utils/pdfDownloadEngine';
 import {
   DynamicColumn,
   IngestedArchiveNode,
@@ -87,9 +91,12 @@ export default function App() {
 
   // Selection & Views
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeView, setActiveView] = useState<'ledger' | 'print' | 'tree' | 'inheritance'>('ledger');
+  const [activeView, setActiveView] = useState<
+    'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic'
+  >('ledger');
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
   const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
+  const [versionHistory, setVersionHistory] = useState<LedgerAuditVersionEntry[]>([]);
 
   // Quick Home Upload Status
   const [isQuickUploading, setIsQuickUploading] = useState(false);
@@ -438,6 +445,55 @@ export default function App() {
     handleApplyMatchedListToLedger(enriched, false);
   };
 
+  // 1-Click Direct PDF File Download of the Matched Inheritance List from Home Screen
+  const handleDirectDownloadMatchedPdf = async () => {
+    setIsQuickUploading(true);
+    setQuickUploadMsg('ওয়ারিশ সনদের সাথে ম্যাচকৃত নতুন তালিকার PDF ফাইল তৈরি হচ্ছে...');
+    try {
+      const matched = matchLandRecordsWithInheritance(
+        records,
+        PROVIDED_WARISH_CERTIFICATES,
+        false
+      );
+      await downloadMatchedInheritancePdf(matched, 'LR_Warish_Matched_New_List');
+      setQuickUploadMsg(
+        `সফলভাবে ${toBengaliNumber(matched.length)} টি ম্যাচকৃত ওয়ারিশ-খতিয়ান রেকর্ডের PDF ফাইল (.pdf) ডাউনলোড হয়েছে!`
+      );
+      setTimeout(() => setQuickUploadMsg(null), 7000);
+    } finally {
+      setIsQuickUploading(false);
+    }
+  };
+
+  // Forensic Master Ledger Proposal Approval (with Rollback Snapshot — Section 17)
+  const handleApproveLedgerProposal = (
+    updatedRecords: LandRecord[],
+    versionEntry: LedgerAuditVersionEntry
+  ) => {
+    setVersionHistory((prev) => [versionEntry, ...prev]);
+    setRecords(updatedRecords);
+    setQuickUploadMsg(
+      `অনুমোদিত ফরেনসিক প্রস্তাবনা মাস্টার লেজারে সংযুক্ত হয়েছে (${versionEntry.actionTitle})।`
+    );
+    setTimeout(() => setQuickUploadMsg(null), 7000);
+  };
+
+  // Rollback Master Ledger to a Previous Snapshot (Section 17)
+  const handleRollbackLedgerVersion = (versionEntry: LedgerAuditVersionEntry) => {
+    setRecords(versionEntry.previousRecordsSnapshot);
+    const rollbackLog: LedgerAuditVersionEntry = {
+      versionId: `VER-ROLLBACK-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actionTitle: `রোলব্যাক কার্যকর করা হয়েছে: ${versionEntry.versionId} (${versionEntry.actionTitle})`,
+      proposalId: versionEntry.proposalId,
+      evidenceIds: versionEntry.evidenceIds,
+      previousRecordsSnapshot: versionEntry.previousRecordsSnapshot,
+    };
+    setVersionHistory((prev) => [rollbackLog, ...prev]);
+    setQuickUploadMsg(`সফলভাবে পূর্ববর্তী সংস্করণ (${versionEntry.versionId})-এ রোলব্যাক করা হয়েছে!`);
+    setTimeout(() => setQuickUploadMsg(null), 7000);
+  };
+
   // Target records for Print View: Ensure 100% of uploaded records are available!
   const printTargetRecords =
     selectedIds.size > 0
@@ -479,6 +535,14 @@ export default function App() {
           columns={columns}
           onBack={() => setActiveView('ledger')}
           onApplyMatchedListToLedger={handleApplyMatchedListToLedger}
+        />
+      ) : activeView === 'forensic' ? (
+        <ForensicAuditView
+          records={records}
+          onBack={() => setActiveView('ledger')}
+          onApproveLedgerProposal={handleApproveLedgerProposal}
+          versionHistory={versionHistory}
+          onRollbackLedgerVersion={handleRollbackLedgerVersion}
         />
       ) : (
         <main className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col space-y-4">
@@ -593,6 +657,14 @@ export default function App() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
+                  onClick={handleDirectDownloadMatchedPdf}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1.5 transition-all"
+                >
+                  <Download className="w-4 h-4 stroke-[2.5] text-slate-950" />
+                  <span>ম্যাচকৃত নতুন তালিকা PDF ডাউনলোড (.pdf)</span>
+                </button>
+
+                <button
                   onClick={() => setActiveView('inheritance')}
                   className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
                 >
@@ -612,6 +684,14 @@ export default function App() {
                   className="px-3 py-2 rounded-lg bg-[#162336] hover:bg-[#1e304a] border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
                 >
                   শুধু গোয়ালী মৌজার ওয়ারিশ ম্যাচ লোড করুন
+                </button>
+
+                <button
+                  onClick={() => setActiveView('forensic')}
+                  className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  <span>ফরেনসিক ম্যাচিং ও বংশলতিকা ইঞ্জিন (Forensic Audit)</span>
                 </button>
               </div>
             </div>
