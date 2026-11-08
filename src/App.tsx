@@ -20,6 +20,8 @@ import {
   Users,
   FileCheck2,
   Fingerprint,
+  Scale,
+  Split,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { HierarchyExplorer } from './components/HierarchyExplorer';
@@ -31,8 +33,11 @@ import { PrintReportView } from './components/PrintReportView';
 import { ArchiveTreeView } from './components/ArchiveTreeView';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
 import { InheritanceMatcherView } from './components/InheritanceMatcherView';
-import { ForensicAuditView } from './components/ForensicAuditView';
+import { ForensicAuditView, ReportTabId } from './components/ForensicAuditView';
+import { SingleLineageInvestigationView, SlulisTabId } from './components/SingleLineageInvestigationView';
+import { SlulisStatusSummary } from './components/SlulisStatusSummary';
 import { LocalDiskDownloadCenter } from './components/LocalDiskDownloadCenter';
+import { downloadMasterSlulisPackage } from './utils/slulisMasterBundleEngine';
 import { REPOSITORY_CONFIG } from './config/repository';
 import { LedgerAuditVersionEntry } from './types/forensic';
 import {
@@ -96,8 +101,24 @@ export default function App() {
   // Selection & Views
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeView, setActiveView] = useState<
-    'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic'
+    'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis'
   >('ledger');
+  const [slulisInitialTab, setSlulisInitialTab] = useState<SlulisTabId>('summary');
+  const [forensicInitialTab, setForensicInitialTab] = useState<ReportTabId>('report2');
+
+  const handleNavigateToSlulis = (tab?: string) => {
+    if (tab) {
+      setSlulisInitialTab(tab as SlulisTabId);
+    }
+    setActiveView('slulis');
+  };
+
+  const handleNavigateToForensic = (tab?: string) => {
+    if (tab) {
+      setForensicInitialTab(tab as ReportTabId);
+    }
+    setActiveView('forensic');
+  };
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
   const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
   const [versionHistory, setVersionHistory] = useState<LedgerAuditVersionEntry[]>(() => [
@@ -114,6 +135,29 @@ export default function App() {
   // Quick Home Upload Status
   const [isQuickUploading, setIsQuickUploading] = useState(false);
   const [quickUploadMsg, setQuickUploadMsg] = useState<string | null>(null);
+
+  // SLULIS 1-Click Master Download State
+  const [isDownloadingSlulisMasterZip, setIsDownloadingSlulisMasterZip] = useState(false);
+  const [slulisZipMsg, setSlulisZipMsg] = useState<string | null>(null);
+
+  const handleDownloadHomeSlulisZip = async () => {
+    if (isDownloadingSlulisMasterZip) return;
+    setIsDownloadingSlulisMasterZip(true);
+    setSlulisZipMsg('মাস্টার প্যাকেজ জিপ তৈরি হচ্ছে...');
+    try {
+      await downloadMasterSlulisPackage(records, (step, pct) => {
+        setSlulisZipMsg(`${step} (${pct}%)`);
+      });
+      setSlulisZipMsg('সফলভাবে ১-ক্লিকে সকল নথি মাস্টার ডাউনলোড সম্পন্ন হয়েছে!');
+      setTimeout(() => setSlulisZipMsg(null), 5000);
+    } catch (err) {
+      console.error('Failed to download SLULIS bundle:', err);
+      setSlulisZipMsg('ডাউনলোডে ত্রুটি দেখা দিয়েছে');
+      setTimeout(() => setSlulisZipMsg(null), 5000);
+    } finally {
+      setIsDownloadingSlulisMasterZip(false);
+    }
+  };
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -555,7 +599,14 @@ export default function App() {
       />
 
       {/* Main Workspace Body */}
-      {activeView === 'print' ? (
+      {activeView === 'slulis' ? (
+        <SingleLineageInvestigationView
+          records={records}
+          onBack={() => setActiveView('ledger')}
+          onNavigateToForensic={handleNavigateToForensic}
+          initialTab={slulisInitialTab}
+        />
+      ) : activeView === 'print' ? (
         <PrintReportView
           records={printTargetRecords}
           columns={columns}
@@ -577,9 +628,88 @@ export default function App() {
           onApproveLedgerProposal={handleApproveLedgerProposal}
           versionHistory={versionHistory}
           onRollbackLedgerVersion={handleRollbackLedgerVersion}
+          initialTab={forensicInitialTab}
         />
       ) : (
         <main className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col space-y-4">
+          {/* SLULIS: Universal Single-Lineage Land Investigation Hub Banner */}
+          <section className="bg-gradient-to-r from-[#1b1509] via-[#241c0b] to-[#141d33] border-2 border-amber-500/50 rounded-xl p-4 sm:p-5 shadow-2xl font-bengali relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-amber-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-950/60 shrink-0 ring-2 ring-amber-300/50">
+                  <Scale className="w-6 h-6 stroke-[2.5]" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/70 border border-amber-500/40 px-2 py-0.5 rounded">
+                      SLULIS — সর্বমৌজা একক বংশধারা তদন্ত সিস্টেম
+                    </span>
+                    <span className="text-xs bg-red-950/60 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-mono">
+                      দাগ ৬৫১ (৮০ শতক গরমিল) · দাগ ৬৫৪ (ভিটাবাড়ি)
+                    </span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-bold text-white">
+                    সফর আলী বংশধারা সর্বমৌজা খতিয়ান চেইন, জমি বেদখল/জালিয়াতি তদন্ত ও দেওয়ানি মোকদ্দমা ড্রাফটিং
+                  </h2>
+                  <p className="text-xs text-slate-300 max-w-4xl">
+                    গোয়ালী মৌজা ও অন্যান্য সকল মৌজায় CS → SA → RS → BS/BRS খতিয়ান চেইন ম্যাপিং, ১২টি বংশগত গরমিল বিশ্লেষণ, ৮ শ্রেণির তৃতীয় পক্ষ অনুপ্রবেশ শনাক্তকরণ, মুসলিম ফারায়েজ ও কোর্ট-রেডি ২৭ দফা দেওয়ানি আরজি ও ১৪টি আইনি পরিশিষ্ট।
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  onClick={() => setActiveView('slulis')}
+                  className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-sm shadow-xl flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Scale className="w-4 h-4 stroke-[2.5] text-slate-950" />
+                  <span>SLULIS তদন্ত ও মোকদ্দমা স্টুডিও</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveView('slulis')}
+                  className="px-3.5 py-2.5 rounded-lg bg-[#19243d] hover:bg-[#233254] border border-amber-500/40 text-amber-300 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
+                  title="দাগ ৬৫১ ও অন্যান্য দাগের পাশাপাশি জরিপ পরিবর্তন ও গরমিল দেখুন"
+                >
+                  <Split className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
+                  <span>দাগ ৬৫১ পাশাপাশি জরিপ তুলনা (Side-by-Side)</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadHomeSlulisZip}
+                  disabled={isDownloadingSlulisMasterZip}
+                  className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+                  title="১-ক্লিকে সকল আরজি, ১৪টি পরিশিষ্ট, ১১-শিট এক্সেল ও ফরেনসিক অডিট রিপোর্ট জিপ ফাইল হিসেবে ডাউনলোড করুন"
+                >
+                  {isDownloadingSlulisMasterZip ? (
+                    <Loader2 className="w-4 h-4 text-slate-950 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  )}
+                  <span>১-ক্লিকে SLULIS সকল নথি মাস্টার ডাউনলোড (.ZIP)</span>
+                </button>
+              </div>
+
+              {slulisZipMsg && (
+                <div className="w-full bg-emerald-950/80 border border-emerald-500/50 rounded-lg p-2.5 flex items-center gap-2 text-xs text-emerald-200 font-semibold shadow-inner mt-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{slulisZipMsg}</span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* SLULIS Status Summary: Forensic Audit & Litigation Drafts Aggregator */}
+          <SlulisStatusSummary
+            records={records}
+            onNavigateToSlulis={handleNavigateToSlulis}
+            onNavigateToForensic={handleNavigateToForensic}
+            onNavigateToSideBySide={() => handleNavigateToSlulis('compare')}
+            onDownloadMasterBundle={handleDownloadHomeSlulisZip}
+            isDownloadingMasterBundle={isDownloadingSlulisMasterZip}
+          />
+
           {/* Quick Direct Phone Memory & Subfolder Upload Bar (No Modal Required!) */}
           <section className="bg-gradient-to-r from-[#141d33] via-[#18233c] to-[#12192c] border border-amber-500/40 rounded-xl p-3.5 sm:p-4 shadow-xl font-bengali">
             <div className="flex flex-wrap items-center justify-between gap-3">

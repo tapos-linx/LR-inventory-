@@ -61,6 +61,10 @@ import {
   downloadForensicReportTablePdf,
   downloadMouzaLandRecordsPdf,
 } from '../utils/pdfDownloadEngine';
+import {
+  Dag651DiscrepancyDetector,
+  DAG_651_DISCREPANCY_ITEMS,
+} from './Dag651DiscrepancyDetector';
 
 interface ForensicAuditViewProps {
   records: LandRecord[];
@@ -71,9 +75,11 @@ interface ForensicAuditViewProps {
   ) => void;
   onRollbackLedgerVersion: (versionEntry: LedgerAuditVersionEntry) => void;
   versionHistory: LedgerAuditVersionEntry[];
+  initialTab?: ReportTabId;
 }
 
-type ReportTabId =
+export type ReportTabId =
+  | 'detector'
   | 'report1'
   | 'report2'
   | 'report3'
@@ -128,10 +134,11 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
   onApproveLedgerProposal,
   onRollbackLedgerVersion,
   versionHistory,
+  initialTab = 'report2',
 }) => {
   // Active Workflow Step & Active Report Tab
   const [activeStep, setActiveStep] = useState<number>(10);
-  const [activeReportTab, setActiveReportTab] = useState<ReportTabId>('report2');
+  const [activeReportTab, setActiveReportTab] = useState<ReportTabId>(initialTab);
 
   // Master Genealogy State (Anchored on Roshan Ali -> Ali Newaz -> Safar Ali -> Kamdar Ali & Siraj Ali)
   const [genealogyLedger, setGenealogyLedger] = useState<GenealogyPersonNode[]>(() =>
@@ -535,6 +542,36 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
     rows: Record<string, string>[];
   } => {
     switch (activeReportTab) {
+      case 'detector':
+        return {
+          title: 'DAG 651 DISCREPANCY DETECTOR — INCONSISTENCY ALERT REPORT (দাগ ৬৫১ স্বয়ংক্রিয় অসঙ্গতি ও গরমিল ডিটেক্টর)',
+          subtitle:
+            'গোয়ালী মৌজা (জেএল ৮৪) | সিএস ৩২০ শতক হতে বিআরএস-এ ৮০ শতক জমি নিখোঁজ ও অনধিকার তৃতীয় পক্ষ বিআরএস রেকর্ড অডিট',
+          fileName: 'Forensic_Report_Dag651_Discrepancy_Alerts',
+          headers: [
+            { key: 'id', label: 'Anomaly ID', width: 120 },
+            { key: 'type', label: 'Inconsistency Type', width: 220 },
+            { key: 'stage', label: 'Survey Transition Stage', width: 170 },
+            { key: 'earlier', label: 'Earlier Verified Claim', width: 240 },
+            { key: 'later', label: 'Later Contested Record', width: 240 },
+            { key: 'delta', label: 'Area Delta', width: 150 },
+            { key: 'severity', label: 'Severity Level', width: 110 },
+            { key: 'cause', label: 'Forensic Root Cause', width: 330 },
+            { key: 'remedy', label: 'Statutory Remedy', width: 220 },
+          ],
+          rows: DAG_651_DISCREPANCY_ITEMS.map((d) => ({
+            id: d.id,
+            type: d.anomalyTypeBengali,
+            stage: d.surveyStage,
+            earlier: `${d.earlierRecord.survey} Kh ${d.earlierRecord.khatianNo}, Dag ${d.earlierRecord.dagNo} (${d.earlierRecord.owner}) = ${d.earlierRecord.areaText}`,
+            later: `${d.laterRecord.survey} Kh ${d.laterRecord.khatianNo}, Dag ${d.laterRecord.dagNo} (${d.laterRecord.owner}) = ${d.laterRecord.areaText}`,
+            delta: d.areaDiscrepancyText,
+            severity: d.severity,
+            cause: d.rootCauseDescription,
+            remedy: d.recommendedLegalAction,
+          })),
+        };
+
       case 'report1':
         return {
           title: 'REPORT 1 — UPLOADED DOCUMENT EXTRACTION (উদ্ধৃত দলিল ও তথ্য তালিকা)',
@@ -1532,6 +1569,12 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
           </div>
         </section>
 
+        {/* AUTOMATED DISCREPANCY DETECTOR: DAG 651 INCONSISTENCY ALERT SECTION */}
+        <Dag651DiscrepancyDetector
+          records={records}
+          onNavigateToChain={() => setActiveReportTab('report5')}
+        />
+
         {/* Global Forensic Filter Bar (Section 16: 11 Mandatory Filters) */}
         <section className="bg-[#121827] border border-slate-800 rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between text-xs">
@@ -1657,6 +1700,10 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
           <div className="p-2.5 bg-[#0c111d] border-b border-slate-800 flex flex-wrap gap-1.5">
             {[
               {
+                id: 'detector' as const,
+                label: `🚨 দাগ ৬৫১ গরমিল ডিটেক্টর (${toBengaliNumber(DAG_651_DISCREPANCY_ITEMS.length)})`,
+              },
+              {
                 id: 'report1' as const,
                 label: `REPORT 1: নিষ্কাশিত দলিল (${toBengaliNumber(filteredExtractedEntries.length)})`,
               },
@@ -1767,6 +1814,16 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
               </button>
             </div>
           </div>
+
+          {/* DETECTOR: DAG 651 DISCREPANCY DETECTOR (AUTOMATED INCONSISTENCY FLAGGING) */}
+          {activeReportTab === 'detector' && (
+            <div className="p-4 space-y-4">
+              <Dag651DiscrepancyDetector
+                records={records}
+                onNavigateToChain={() => setActiveReportTab('report5')}
+              />
+            </div>
+          )}
 
           {/* REPORT 1: UPLOADED DOCUMENT EXTRACTION */}
           {activeReportTab === 'report1' && (

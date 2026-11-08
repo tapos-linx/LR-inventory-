@@ -14,6 +14,7 @@ import {
   Download,
   Users,
   Fingerprint,
+  Scale,
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
 
@@ -21,8 +22,8 @@ interface HeaderProps {
   totalRecords: number;
   filteredCount: number;
   selectedCount: number;
-  activeView: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic';
-  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic') => void;
+  activeView: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis';
+  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis') => void;
   onOpenIngest: () => void;
   onOpenColumnCustomizer: () => void;
   onExportExcel: () => void;
@@ -83,6 +84,17 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 2: Navigation / Workspace View Tabs (Single-line controls) */}
         <nav className="hidden xl:flex items-center gap-1 p-1 bg-[#141b2c] border border-amber-500/20 rounded-lg">
           <button
+            onClick={() => setActiveView('slulis')}
+            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
+              activeView === 'slulis'
+                ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 border border-amber-300 shadow-md'
+                : 'text-amber-300 hover:text-amber-200 hover:bg-amber-950/40 border border-amber-500/30'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>SLULIS: সফর আলী মোকদ্দমা ও সর্বমৌজা তদন্ত</span>
+          </button>
+          <button
             onClick={() => setActiveView('ledger')}
             className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
               activeView === 'ledger'
@@ -138,6 +150,16 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 3: Primary Actions with High-Visibility Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* SLULIS Investigation Button (Mobile & Tablet) */}
+          <button
+            onClick={() => setActiveView('slulis')}
+            title="SLULIS: সফর আলী বংশধারা সর্বমৌজা তদন্ত ও মোকদ্দমা"
+            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 border border-amber-300 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
+          >
+            <Scale className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+            <span className="hidden sm:inline">SLULIS মোকদ্দমা</span>
+          </button>
+
           {/* Forensic Audit Quick Button (visible on mobile/tablet) */}
           <button
             onClick={() => setActiveView('forensic')}

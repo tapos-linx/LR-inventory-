@@ -14,7 +14,14 @@ import {
   Layers,
   MapPin,
   BookOpen,
+  Scale,
+  FolderArchive,
 } from 'lucide-react';
+import {
+  downloadMasterSlulisPackage,
+  buildMasterSlulisExcelWorkbook,
+  buildCourtReadyPlaintText,
+} from '../utils/slulisMasterBundleEngine';
 import {
   DynamicColumn,
   IngestedArchiveNode,
@@ -85,10 +92,60 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
   const [busyDocId, setBusyDocId] = useState<string | null>(null);
   const [lastSavedMsg, setLastSavedMsg] = useState<string | null>(null);
   const [selectedForensicDoc, setSelectedForensicDoc] = useState<ForensicDocKey>('report1');
+  const [isDownloadingSlulisZip, setIsDownloadingSlulisZip] = useState(false);
+  const [slulisZipMsg, setSlulisZipMsg] = useState<string | null>(null);
 
   const notifySaved = (docLabel: string) => {
     setLastSavedMsg(`"${docLabel}" সফলভাবে আপনার লোকাল ডিস্কে ডাউনলোড ও সেভ হয়েছে!`);
     setTimeout(() => setLastSavedMsg(null), 6000);
+  };
+
+  const handleDownloadSlulisMasterZip = async () => {
+    if (isDownloadingSlulisZip) return;
+    setIsDownloadingSlulisZip(true);
+    setSlulisZipMsg('মাস্টার প্যাকেজ জিপ তৈরি হচ্ছে...');
+    try {
+      await downloadMasterSlulisPackage(records, (step, pct) => {
+        setSlulisZipMsg(`${step} (${pct}%)`);
+      });
+      notifySaved('SLULIS মৃত সফর আলী বংশধারার সকল নথি মাস্টার জিপ প্যাকেজ (.zip)');
+    } catch (err) {
+      console.error('Failed to download SLULIS bundle:', err);
+      setSlulisZipMsg('ডাউনলোডে ত্রুটি দেখা দিয়েছে');
+    } finally {
+      setIsDownloadingSlulisZip(false);
+      setTimeout(() => setSlulisZipMsg(null), 5000);
+    }
+  };
+
+  const handleDownloadSlulisExcelOnly = () => {
+    const uint8 = buildMasterSlulisExcelWorkbook(records);
+    const blob = new Blob([uint8.buffer as ArrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SLULIS_Sofor_Ali_Full_Investigation_Workbook_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notifySaved('SLULIS ১১-শিট পূর্ণাঙ্গ এক্সেল ওয়ার্কবুক (.xlsx)');
+  };
+
+  const handleDownloadSlulisPlaintOnly = () => {
+    const text = buildCourtReadyPlaintText();
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SLULIS_Court_Ready_Civil_Plaint_27_Sections_${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notifySaved('SLULIS কোর্ট-রেডি ২৭ দফা দেওয়ানি আরজি ড্রাফট (.txt)');
   };
 
   // 1. Master Land Record Ledger Downloads
@@ -1163,6 +1220,67 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
             >
               <FileJson className="w-3 h-3" />
               <span>.JSON</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 7: SLULIS Master 1-Click Litigation Bundle (Full-Width Card) */}
+        <div className="md:col-span-2 lg:col-span-3 bg-gradient-to-r from-[#121b30] via-[#16233f] to-[#10182c] border-2 border-amber-500/60 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-amber-400 bg-amber-950/80 border border-amber-500/50 px-2 py-0.5 rounded flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-amber-400" />
+                <span>৭. SLULIS — মৃত সফর আলী বংশধারা: সর্বমৌজা টাইটেল পুনর্গঠন ও মোকদ্দমা ড্রাফট</span>
+              </span>
+              <span className="text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono">
+                ১-ক্লিকে সকল নথি মাস্টার ডাউনলোড (.ZIP)
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-white">
+              কোর্ট-রেডি ২৭ দফা দেওয়ানি আরজি, ১৪টি আইনি পরিশিষ্ট, ১১-শিট এক্সেল ও ফরেনসিক অডিট রেজিস্টার
+            </h3>
+            <p className="text-xs text-slate-300">
+              দাগ ৬৫১-৬৫৪ ও সর্বমৌজার CS→SA→RS→BS খতিয়ান চেইন, ১২টি বংশগত গরমিল, ৮ শ্রেণির তৃতীয় পক্ষ অনুপ্রবেশ, ৮০ শতক মিসিং ল্যান্ড অ্যানালাইসিস, মুসলিম ফারায়েজ এবং অডিট ম্যানিফেস্ট CSV সহ মোট ২০+ নথির ফুল প্যাকেজ।
+            </p>
+            {slulisZipMsg && (
+              <div className="bg-emerald-950/90 border border-emerald-500/60 rounded-lg p-2 flex items-center gap-2 text-xs text-emerald-200 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{slulisZipMsg}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={handleDownloadSlulisMasterZip}
+              disabled={isDownloadingSlulisZip}
+              className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
+              title="১-ক্লিকে সকল আরজি, পরিশিষ্ট, এক্সেল, ফরেনসিক ও ম্যানিফেস্ট ফাইল একটি জিপে ডাউনলোড করুন"
+            >
+              {isDownloadingSlulisZip ? (
+                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+              ) : (
+                <FolderArchive className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+              )}
+              <span>১-ক্লিকে সকল নথি মাস্টার ডাউনলোড (.ZIP)</span>
+            </button>
+
+            <button
+              onClick={handleDownloadSlulisExcelOnly}
+              className="px-3 py-2 bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              title="১১টি শিট সহ সম্পূর্ণ SLULIS এক্সেল ওয়ার্কবুক সেভ করুন"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>১১-শিট এক্সেল (.XLSX)</span>
+            </button>
+
+            <button
+              onClick={handleDownloadSlulisPlaintOnly}
+              className="px-3 py-2 bg-sky-950/70 hover:bg-sky-900/80 border border-sky-500/50 text-sky-300 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              title="২৭ দফা সম্বলিত কোর্ট-রেডি দেওয়ানি আরজি ড্রাফট সেভ করুন"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>দেওয়ানি আরজি (.TXT)</span>
             </button>
           </div>
         </div>
