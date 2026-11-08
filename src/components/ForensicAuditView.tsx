@@ -605,7 +605,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
         return {
           title: 'REPORT 2 — GENEALOGY MATCHED PERSONS (বংশলতিকায় ম্যাচকৃত ব্যক্তিগণের তালিকা)',
           subtitle:
-            'রসন আলী → আলী নেওয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী বংশধারার সাথে প্রমাণভিত্তিক ম্যাচিং',
+            'রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ বংশধারার সাথে প্রমাণভিত্তিক ম্যাচিং',
           fileName: 'Forensic_Report_02_Genealogy_Matched_Persons',
           headers: [
             { key: 'evidenceId', label: 'Evidence ID & Doc', width: 150 },
@@ -663,7 +663,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
         return {
           title: 'REPORT 4 — UNMATCHED PERSONS (বংশলতিকায় অমিলকৃত ব্যক্তিগণের পৃথক তালিকা)',
           subtitle:
-            'আপলোডকৃত রেকর্ডে পাওয়া গেছে কিন্তু বর্তমান রসন আলী বংশলতিকায় পাওয়া যায়নি (FORENSIC PERSONS OF INTEREST)',
+            'আপলোডকৃত রেকর্ডে পাওয়া গেছে কিন্তু বর্তমান রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী বংশলতিকায় পাওয়া যায়নি (FORENSIC PERSONS OF INTEREST)',
           fileName: 'Forensic_Report_04_Unmatched_Persons',
           headers: [
             { key: 'evidenceId', label: 'Evidence ID & Document', width: 180 },
@@ -905,7 +905,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
       generatedAt: new Date().toISOString(),
       system: 'Bangladesh Historical Land Record Forensic Matching & Genealogy Integration Engine',
       genealogyAnchor:
-        'রসন আলী → আলী নেওয়াজ / নাজির আলী নেওয়াজ → সফর আলী → কামদার আলী এবং সিরাজ আলী → পরবর্তী প্রজন্ম',
+        'রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ',
       reportTitle: data.title,
       evidenceRegister: evidenceDocs,
       rowCount: data.rows.length,
@@ -1258,7 +1258,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
                 </h1>
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                মাস্টার বংশলতিকা নোঙর: <strong className="text-amber-300">রসন আলী → আলী নেওয়াজ / নাজির আলী নেওয়াজ → সফর আলী → কামদার আলী এবং সিরাজ আলী → পরবর্তী প্রজন্ম</strong> (গোয়ালী, জে.এল. ৮৪, নবীনগর, ব্রাহ্মণবাড়িয়া)
+                মাস্টার বংশলতিকা নোঙর: <strong className="text-amber-300">রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ</strong> (গোয়ালী, জে.এল. ৮৪, নবীনগর, ব্রাহ্মণবাড়িয়া | বিঃদ্রঃ সনদে কানদার আলী = কামদার আলী স্পেলিং মিসটেক)
               </p>
             </div>
           </div>
@@ -3242,10 +3242,10 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-white">
-                    MASTER GENEALOGY REFERENCE LEDGER (রসন আলী → আলী নেওয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী → পরবর্তী প্রজন্ম)
+                    MASTER GENEALOGY REFERENCE LEDGER (রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ)
                   </h3>
                   <p className="text-xs text-slate-400">
-                    মূল বানান (Original Name), নরমালাইজড রূপ এবং বিকল্প বানান (Variant Spellings) পৃথকভাবে সংরক্ষিত (Section 3)
+                    মূল বানান (Original Name), নরমালাইজড রূপ এবং বিকল্প বানান (Variant Spellings) পৃথকভাবে সংরক্ষিত (উল্লেখ্য: সনদে কানদার আলী / কান্দর আলী / কাম্দার আলী হিসেবে স্পেলিং মিসটেক হয়েছে, মূলত সেটি হবে কামদার আলী)
                   </p>
                 </div>
 

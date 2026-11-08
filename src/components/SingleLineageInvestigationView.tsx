@@ -546,9 +546,9 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="bg-[#121b30] p-3.5 rounded-lg border border-slate-800 space-y-1">
-                <span className="text-slate-400">তদন্তাধীন মূল পূর্বপুরুষ</span>
-                <div className="text-sm font-bold text-white">মরহুম সফর আলী</div>
-                <p className="text-[11px] text-slate-400">পিতা: মৃত নাজির ওরফে আলী নোয়াজ | মৃত্যু: ১৮-১১-১৯০৫</p>
+                <span className="text-slate-400">তদন্তাধীন মূল বংশলতিকা</span>
+                <div className="text-sm font-bold text-white">রোশন আলী → নাজির আলী নোয়াজ → সফর আলী</div>
+                <p className="text-[11px] text-slate-400">দুই পুত্র: কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ</p>
               </div>
               <div className="bg-[#121b30] p-3.5 rounded-lg border border-slate-800 space-y-1">
                 <span className="text-slate-400">প্রাথমিক মৌজা ও জে.এল.</span>
@@ -571,6 +571,9 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
               <h3 className="text-sm font-bold text-white">মূল তদন্ত প্রতিবেদন ও অনুসন্ধানের মূল সিদ্ধান্তসমূহ:</h3>
               <ul className="list-disc list-inside space-y-1.5 text-slate-300">
                 <li>
+                  <strong>চূড়ান্ত মাস্টার বংশলতিকা:</strong> রোশন আলী → তাহার পুত্র নাজির আলী নোয়াজ অথবা আলী নোয়াজ → তাহার পুত্র সফর আলী → তাহার দুই পুত্র কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ। (উল্লেখ্য: সনদে কানদার আলী / কান্দর আলী / কাম্দার আলী হিসেবে স্পেলিং মিসটেক হয়েছে, মূলত সেটি হবে কামদার আলী)।
+                </li>
+                <li>
                   <strong>সিএস খতিয়ান ১১৮-এর অবিসংবাদিত ভিত্তি:</strong> গোয়ালী মৌজার সিএস ১১৮ খতিয়ানে সফর আলীর নামে দাগ ৬৫১ (৩২০ শতক), ৬৫২ (১৫০ শতক), ৬৫৩ (৯০ শতক) এবং ৬৫৪ (৮০ শতক) নিরঙ্কুশভাবে রেকর্ডভুক্ত ছিল।
                 </li>
                 <li>
@@ -578,9 +581,6 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
                 </li>
                 <li>
                   <strong>দাগ ৬৫১-এর ৮০ শতক জবরদখল ও গরমিল শনাক্ত:</strong> সিএস ৬৫১ দাগের ৩২০ শতক হতে এসএ ২৪৫ খতিয়ানে ২৪০ শতক রেকর্ড করা হয়, ফলে ৮০ শতক জমি ড্রপ পড়ে। পরবর্তীতে বিআরএস জরিপে কোনো বৈধ রেজিস্ট্রি সাফ-কবলা বায়া দলিল ব্যতিরেকে তৃতীয় পক্ষ মৃত সামসুল হক গং বিআরএস খতিয়ান ৯০২, দাগ ১৫৮৮-তে অবৈধভাবে নিজেদের নামে রেকর্ড করে নেয়।
-                </li>
-                <li>
-                  <strong>মামলার এখতিয়ার ও সুনির্দিষ্ট কৌশল:</strong> যেহেতু মূল স্বত্ব ঘোষণা (Declaration of Title) এবং জবরদখল প্রতিহত করে খাস দখল পুনরুদ্ধারের প্রতিকার চাওয়া হচ্ছে, সেহেতু মামলাটি বিজ্ঞ যুগ্ম জেলা জজ আদালতে দায়েরযোগ্য এবং এর সাথে ভূমি অপরাধ প্রতিরোধ ও প্রতিকার আইন ২০২৩-এর সুরক্ষা প্রযোজ্য।
                 </li>
               </ul>
             </div>
@@ -598,66 +598,87 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
                 <GitBranch className="w-4 h-4" />
                 <span>স্থায়ী মাস্টার পারিবারিক বংশলতিকা (Fixed Master Family Lineage Tree)</span>
               </h3>
-              <span className="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
-                ৬টি প্রাথমিক ওয়ারিশ সনদ ভিত্তিক
+              <span className="text-xs text-emerald-300 bg-emerald-950/50 px-2.5 py-1 rounded border border-emerald-500/30 font-semibold">
+                আপলোডকৃত ৮টি সনদ ও প্রমিত বংশলতিকা ভিত্তিক
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              সফর আলী (Gen 1) → সিরাজ আলী ও কামদার আলী (Gen 2) → ফিরুজ মিয়া, নোয়াব মিয়া, জাহের মিয়া, জাকির হোসেন, আনোয়ারা বেগম, জাহানারা বেগম (Gen 3) → তৎপরবর্তী প্রজন্ম
+            <p className="text-xs text-slate-300">
+              রোশন আলী (Gen 1) → নাজির আলী নোয়াজ অথবা আলী নোয়াজ (Gen 2) → সফর আলী (Gen 3) → কামদার আলী ও সিরাজ আলী (Gen 4) → এবং তদীয় বংশধরগণ (Gen 5+)
             </p>
 
-            <div className="bg-[#090d16] p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed">
-              <div className="font-bold text-amber-300">
-                [প্রজন্ম ১] সফর আলী (মৃত্যু: ১৮-১১-১৯০৫) ├── স্ত্রী: ফুলবানু (মৃত)
+            <div className="bg-[#090d16] p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed space-y-1">
+              <div className="font-bold text-amber-400">
+                [প্রজন্ম ১] রোশন আলী (মূল পূর্বপুরুষ)
               </div>
-              <div className="pl-6 text-slate-300">
-                ├── [প্রজন্ম ২] কামদার আলী (মৃত) ── [RECORD GAP: পৃথক ওয়ারিশ সনদ তলবযোগ্য]
+              <div className="pl-4 font-bold text-amber-300">
+                └── [প্রজন্ম ২] নাজির আলী নোয়াজ অথবা আলী নোয়াজ (সনদে: মৃত নাজির ওরফে আলী নোয়াজ) ├── স্ত্রী: পরিষ্কারের নেছা (মৃত)
               </div>
-              <div className="pl-6 text-emerald-300 font-bold">
-                └── [প্রজন্ম ২] সিরাজ আলী (মৃত্যু: ০১-০২-১৯৭১) ├── স্ত্রী: আইমনের নেছা (মৃত)
+              <div className="pl-8 font-bold text-emerald-300">
+                └── [প্রজন্ম ৩] সফর আলী (মৃত্যু: ১৮-১১-১৯০৫) ├── স্ত্রী: ফুলবানু (মৃত) [সনদ নং ২০২৬৫৪১১৮১২০০০০০৩]
               </div>
-              <div className="pl-12 text-slate-200">
-                ├── [Gen 3A] ফিরুজ মিয়া (মৃত ২২-০৫-২০০৯) ── [৮ জন ওয়ারিশ: রফিকুল, খোকন, টিটু, জামাল, রানু, সুরাইয়া, স্ত্রী রোকেয়া]
+              <div className="pl-14 text-amber-200 font-bold">
+                ├── [প্রজন্ম ৪ - ১ম পুত্র] কামদার আলী (মৃত) [বিঃদ্রঃ সনদে কানদার আলী / কান্দর আলী / কাম্দার আলী হিসেবে স্পেলিং মিসটেক হয়েছে, মূলত নাম কামদার আলী]
               </div>
-              <div className="pl-12 text-slate-200">
-                ├── [Gen 3B] নোয়াব মিয়া (মৃত ১৭-০৬-২০২৬) ── [৮ জন ওয়ারিশ: রহিম, আব্দুল করিম, বিল্লাল, জিলানী, কাইয়ুম, জসিম, মনির]
+              <div className="pl-20 text-slate-200">
+                ├── [Gen 5 - কামদার শাখা ক] আঃ আলীম (পিতা: কামদার আলী; সনদ: কাই(দঃ)/ইউপি/২০২৩(৫৩)) ── [১৭ জন উত্তরাধিকারী: ৩ স্ত্রী (আমেনা, সাহেদা, হেলেনা), ৬ পুত্র (আব্দুর রহমান, আব্দুল জলিল, সেলিম মিয়া, শামীম, মমিন, আমিন মিয়া) ও ৮ কন্যা]
               </div>
-              <div className="pl-12 text-slate-200">
-                ├── [Gen 3C] মোঃ জাহের মিয়া (মৃত ১৩-০৬-২০০৬) ── [১২ জন ওয়ারিশ: ফোরকান, ইমান, জয়দুল, জালাল, বোরহান, নিজাম, লাভলী, তাছলিমা, মানছুরা, জোসনা, স্ত্রী রোশেনা ও হনুফা]
+              <div className="pl-20 text-slate-200">
+                └── [Gen 5 - কামদার শাখা খ] আব্দুল কাদির (পিতা: কামদার আলী [সনদে কান্দর আলী]; মাতা: জাহেরা খাতুন; সনদ: ২০২৬১২১৮৫৪০০০০০২১) ── [১১ জন ওয়ারিশ: স্ত্রী শাহারা খাতুন, পুত্র খলিল, আনু, তাজু মিয়া, মোহাম্মদ করিম, সুহেল মিয়া, লুক্কন মিয়া, মোঃ সাক্কন, মোঃ মনির এবং কন্যা পারভীনা বেগম ও সারমিন আক্তার]
               </div>
-              <div className="pl-12 text-sky-300">
-                ├── [Gen 3D] মোঃ জাকির হোসেন (জীবিত)
+              <div className="pl-14 text-emerald-300 font-bold pt-1">
+                └── [প্রজন্ম ৪ - ২য় পুত্র] সিরাজ আলী (মৃত্যু: ০১-০২-১৯৭১) ├── স্ত্রী: আইমনের নেছা ও বানু বেগম (মৃত) [সনদ নং ২০২৬৫৪১১৮১২০০০০০১]
               </div>
-              <div className="pl-12 text-sky-300">
-                ├── [Gen 3E] আনোয়ারা বেগম (জীবিত)
+              <div className="pl-20 text-slate-200">
+                ├── [Gen 5 - সিরাজ শাখা ক] ফিরুজ মিয়া (মৃত ২২-০৫-২০০৯; সনদ: ২০২৬৫৪১১৮১২০০০০০২) ── [৮ জন ওয়ারিশ: স্ত্রী তাসলিমা বেগম ও রোকিয়া খাতুন, পুত্র রফিকুল ইসলাম, খোকন মিয়া, মোঃ টিটু (নাগরিকত্ব সনদ: ৪৬৫৪০৬৯০৫৪), জামাল মিয়া, কন্যা রানু কাইযুম ও সুরাইয়া বেগম]
               </div>
-              <div className="pl-12 text-sky-300">
-                └── [Gen 3F] জাহানারা বেগম (জীবিত)
+              <div className="pl-20 text-slate-200">
+                ├── [Gen 5 - সিরাজ শাখা খ] নোয়াব মিয়া (মৃত ১৭-০৬-২০২৬; সনদ: ২০২৬১২১৮৫৪০০০০০০৫) ── [৮ জন ওয়ারিশ: স্ত্রী আমেনা খাতুন, পুত্র মোঃ রহিম মিয়া, মোঃ আব্দুল করিম, মোঃ বিল্লাল হোসেন, জিলানী মিয়া, আব্দুল কাইযুম, জসিম উদ্দিন ও মনির হোসেন]
+              </div>
+              <div className="pl-20 text-slate-200">
+                ├── [Gen 5 - সিরাজ শাখা গ] মোঃ জাহের মিয়া (মৃত ১৩-০৬-২০০৬; সনদ: ২০২৬৫৪১১৮১২০০০০০৪) ── [১২ জন ওয়ারিশ: ২ স্ত্রী রোশেনা বেগম ও হনুফা বেগম, ৬ পুত্র ফোরকান, ইমান, জয়দুল, জালাল, বোরহান, নিজাম ও ৪ কন্যা লাভলী, তাছলিমা, মানছুরা, জোসনা]
+              </div>
+              <div className="pl-20 text-sky-300">
+                ├── [Gen 5 - সিরাজ শাখা ঘ] মোঃ জাকির হোসেন (জীবিত — এনআইডি: ৫৫৪৭৬৯৭৯২০)
+              </div>
+              <div className="pl-20 text-sky-300">
+                ├── [Gen 5 - সিরাজ শাখা ঙ] আনোয়ারা বেগম (জীবিত — এনআইডি: ৫৫৪৬৯৮২৬৫২)
+              </div>
+              <div className="pl-20 text-sky-300">
+                └── [Gen 5 - সিরাজ শাখা চ] জাহানারা বেগম (জীবিত — এনআইডি: ৬৮৫৬০৮৬৬৬২)
               </div>
             </div>
           </div>
 
-          {/* Pending Family Identity Verification: Abdul Qadir & Kandor Ali */}
+          {/* Spelling Mistake Clarification Note: Kamdar Ali vs Kandar/Kandor Ali */}
           <div className="bg-[#121324] border border-amber-500/40 rounded-xl p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-amber-400" />
                 <h4 className="text-sm font-bold text-white">
-                  পরিচয় অমীমাংসিত শাখা: আব্দুল কাদির (পিতা- কান্দর আলী) — Pending Identity Register
+                  বিশেষ বানান সংশোধনী নোট: কানদার আলী / কান্দর আলী / কাম্দার আলী → মূলত: কামদার আলী
                 </h4>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                {PENDING_FAMILY_IDENTITY_DATA[0].currentStatus}
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                SPELLING MISTAKE CLARIFIED (প্রকৃত নাম: কামদার আলী)
               </span>
             </div>
-            <p className="text-xs text-slate-300">{PENDING_FAMILY_IDENTITY_DATA[0].unverifiedConnectionReason}</p>
-            <div className="bg-[#090d16] p-3 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-1">
-              <strong className="text-amber-300">যাচাইকরণের বাধ্যতামূলক চেকলিস্ট:</strong>
-              <ul className="list-disc list-inside space-y-0.5 text-slate-300">
-                {PENDING_FAMILY_IDENTITY_DATA[0].verificationCheckpoints.map((cp, idx) => (
-                  <li key={idx}>{cp}</li>
-                ))}
-              </ul>
+            <p className="text-xs text-slate-200 leading-relaxed">
+              উল্লিখিত সনদে <strong className="text-amber-300">কানদার আলী / কান্দর আলী</strong> (আব্দুল কাদিরের ওয়ারিশান সনদ নং ২০২৬১২১৮৫৪০০০০০২১) এবং <strong className="text-amber-300">মৃত কাম্দার আলী</strong> (আঃ আলীমের উত্তরাধিকারী সনদপত্র নং কাই(দঃ)/ইউপি/২০২৩(৫৩)) হিসেবে <strong className="text-rose-300">স্পেলিং মিসটেক (করণিক বানান ভুল)</strong> হয়েছে। মূলত সেটি হবে সফর আলীর পুত্র <strong className="text-emerald-300">কামদার আলী</strong>।
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {PENDING_FAMILY_IDENTITY_DATA.map((item, index) => (
+                <div key={index} className="bg-[#090d16] p-3 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-1.5">
+                  <div className="font-bold text-amber-300">
+                    {item.personName} (সনদ নং: {item.certificateNo}) — {toBengaliNumber(item.declaredHeirsCount)} জন ওয়ারিশ
+                  </div>
+                  <p className="text-slate-300">{item.unverifiedConnectionReason}</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                    {item.verificationCheckpoints.map((cp, idx) => (
+                      <li key={idx}>{cp}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
 

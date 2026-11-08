@@ -446,7 +446,7 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
       case 'report3':
         return {
           title: 'REPORT 3 — INHERITANCE CERTIFICATE EXTRACTED PERSONS',
-          subtitle: 'ওয়ারিশ সনদ হতে নিষ্কাশিত ৪৯ জন ব্যক্তি (RECORD-LINKED PERSONS)',
+          subtitle: 'আপলোডকৃত ৮টি সনদ হতে নিষ্কাশিত ৬৭ জন ব্যক্তি (RECORD-LINKED PERSONS)',
           fileName: 'Forensic_Report_03_Inheritance_Persons',
           headers: [
             { key: 'personId', label: 'Person & Evidence ID', width: 150 },
@@ -633,7 +633,7 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
       case 'genealogy':
         return {
           title: 'MASTER GENEALOGY LEDGER (মাস্টার বংশলতিকা বৃক্ষ)',
-          subtitle: 'রসন আলী → আলী নেওয়াজ / নাজির আলী নেওয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী → পরবর্তী প্রজন্ম',
+          subtitle: 'রোশন আলী → নাজির আলী নোয়াজ অথবা আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ',
           fileName: 'Forensic_Master_Genealogy_Ledger',
           headers: [
             { key: 'personId', label: 'Person ID & Gen', width: 160 },
@@ -1014,20 +1014,20 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
           </div>
         </div>
 
-        {/* Card 4: 6 Provided Warish Certificates & 49 Heirs Directory */}
+        {/* Card 4: 8 Uploaded Warish Certificates & 67 Heirs Directory */}
         <div className="bg-[#0b101d] border border-slate-800 hover:border-amber-500/40 rounded-xl p-3 flex flex-col justify-between gap-2.5">
           <div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                <span>৪. ৬টি ওয়ারিশ সনদ ও ৪৯ জন ওয়ারিশ ডিরেক্টরি</span>
+                <span>৪. আপলোডকৃত ৮টি সনদ ও ৬৭ জন ওয়ারিশ ডিরেক্টরি</span>
               </span>
               <span className="text-[10px] font-mono bg-amber-500/15 text-amber-300 px-1.5 py-0.5 rounded">
-                ৪৯ জন ওয়ারিশ
+                ৬৭ জন সনদভুক্ত
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              গোয়ালী মৌজার ৬টি ওয়ারিশ সনদের সকল মৃত পূর্বপুরুষ ও ৪৯ জন ওয়ারিশের তালিকা।
+              গোয়ালী মৌজার আপলোডকৃত ৮টি সনদের (৭টি ওয়ারিশ/উত্তরাধিকারী + ১টি নাগরিকত্ব সনদ) সকল ৬৭ জন ওয়ারিশের তালিকা।
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/80">
@@ -1047,9 +1047,9 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
               onClick={() => {
                 exportWarishCertificatesToExcel(
                   PROVIDED_WARISH_CERTIFICATES,
-                  'LR_All_6_Warish_Certificates'
+                  'LR_All_8_Uploaded_Warish_Certificates'
                 );
-                notifySaved('৬টি ওয়ারিশ সনদ ডিরেক্টরি (.xlsx)');
+                notifySaved('৮টি আপলোডকৃত ওয়ারিশ সনদ ডিরেক্টরি (.xlsx)');
               }}
               className="px-2 py-1 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 text-emerald-300 font-semibold rounded text-[11px] flex items-center gap-1"
             >
@@ -1058,22 +1058,14 @@ export const LocalDiskDownloadCenter: React.FC<LocalDiskDownloadCenterProps> = (
             </button>
             <button
               onClick={() => {
-                exportToJSON(PROVIDED_WARISH_CERTIFICATES, 'LR_All_6_Warish_Certificates');
-                notifySaved('৬টি ওয়ারিশ সনদ ডিরেক্টরি (.json)');
+                exportToJSON(PROVIDED_WARISH_CERTIFICATES, 'LR_All_8_Uploaded_Warish_Certificates');
+                notifySaved('৮টি আপলোডকৃত ওয়ারিশ সনদ ডিরেক্টরি (.json)');
               }}
               className="px-2 py-1 bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/40 text-purple-300 font-semibold rounded text-[11px] flex items-center gap-1"
             >
               <FileJson className="w-3 h-3" />
               <span>.JSON</span>
             </button>
-            <a
-              href={REFERENCE_INHERITANCE_FILE_PATH}
-              download="ওয়ারিশ_সনদের_তালিকা.txt"
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-semibold rounded text-[11px] flex items-center gap-1"
-            >
-              <Download className="w-3 h-3" />
-              <span>.TXT</span>
-            </a>
           </div>
         </div>
 

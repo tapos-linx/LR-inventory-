@@ -45,18 +45,29 @@ export function normalizeBanglaName(rawName: string): string {
  * Treated as possible name variants, never automatically merged without corroborating father/mouza/record evidence.
  */
 const KNOWN_VARIANT_GROUPS: string[][] = [
-  ['রসন আলী', 'রওশন আলী', 'রোশন আলী'],
-  ['আলী নেওয়াজ', 'আলী নোয়াজ', 'নাজির আলী নেওয়াজ', 'নাজির ওরফে আলী নোয়াজ', 'নাজির আলী নোয়াজ'],
+  ['রোশন আলী', 'রসন আলী', 'রওশন আলী'],
+  [
+    'নাজির আলী নোয়াজ',
+    'আলী নোয়াজ',
+    'আলী নোয়াজ',
+    'নাজির ওরফে আলী নোয়াজ',
+    'নাজির ওরফে আলী নোয়াজ',
+    'মৃত নাজির ওরফে আলী নোয়াজ',
+  ],
   ['সফর আলী', 'ছফর আলী', 'সফর আলি'],
-  ['কামদার আলী', 'কান্দর আলী', 'কামদার আলি', 'কান্দর আলি'],
+  ['কামদার আলী', 'কানদার আলী', 'কান্দর আলী', 'কাম্দার আলী', 'মৃত কাম্দার আলী', 'মৃত কান্দর আলী'],
   ['সিরাজ আলী', 'সিরাজ আলি', 'ছিরাজ আলী'],
-  ['ফিরুজ মিয়া', 'ফিরুজ মিয়া', 'ফিরোজ মিয়া', 'ফিরোজ মিয়া'],
-  ['নোয়াব মিয়া', 'নোয়াব মিয়া', 'নওয়াব মিয়া'],
-  ['মোঃ জাহের মিয়া', 'জাহের মিয়া', 'জাহের মিয়া'],
+  ['ফিরুজ মিয়া', 'ফিরুজ মিয়া', 'মৃত মোঃ ফিরুজ মিয়া', 'ফিরোজ মিয়া'],
+  ['নোয়াব মিয়া', 'নোয়াব মিয়া', 'নওয়াব মিয়া'],
+  ['মোঃ জাহের মিয়া', 'মোঃ জাহের মিয়া', 'জাহের মিয়া', 'জাহের মিয়া'],
+  ['আঃ আলীম', 'আব্দুল আলীম', 'আবদুল আলীম'],
   ['আব্দুল কাদির', 'আবদুল কাদির', 'আঃ কাদির'],
   ['তাসলিমা বেগম', 'তাছলিমা বেগম'],
+  ['রোকিয়া খাতুন', 'রোকেয়া খাতুন'],
+  ['রানু কাইযুম', 'রানু কাইয়ুম'],
+  ['আব্দুল কাইযুম', 'আব্দুল কাইয়ুম'],
   ['আইমনের নেছা', 'আইমনের নেসা', 'আয়মনের নেছা'],
-  ['পরিচ্ছারের নেছা', 'পরিচ্ছারের নেসা'],
+  ['পরিষ্কারের নেছা', 'পরিচ্ছারের নেছা'],
 ];
 
 export function areVariantNames(nameA: string, nameB: string): boolean {
@@ -142,60 +153,62 @@ export function getEvidencePrefixAndTier(docType: ForensicDocumentType): {
 }
 
 /**
- * Builds the Initial Master Genealogy Reference Anchor (Section 3):
- * রসন আলী → আলী নেওয়াজ / নাজির আলী নেওয়াজ → সফর আলী → কামদার আলী এবং সিরাজ আলী → তাঁদের উত্তরসূরি ও পরবর্তী প্রজন্ম।
+ * Builds the Master Genealogy Reference Anchor:
+ * রোশন আলী → তাহার পুত্র নাজির আলী নোয়াজ অথবা আলী নোয়াজ → তাহার পুত্র সফর আলী → তাহার দুই পুত্র কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ।
+ * (উল্লেখ্য: সনদে কানদার আলী / কান্দর আলী / কাম্দার আলী হিসেবে স্পেলিং মিসটেক হয়েছে, মূলত সেটি হবে কামদার আলী।)
  */
 export function buildMasterGenealogyLedger(): GenealogyPersonNode[] {
   const nodes: GenealogyPersonNode[] = [
     {
       personId: 'GEN-001',
       generation: 1,
-      originalName: 'রসন আলী',
-      normalizedName: normalizeBanglaName('রসন আলী'),
-      variantSpellings: ['রসন আলী', 'রওশন আলী', 'রোশন আলী'],
-      fatherOriginalName: 'অজ্ঞাত (আদি পূর্বপুরুষ)',
+      originalName: 'রোশন আলী',
+      normalizedName: normalizeBanglaName('রোশন আলী'),
+      variantSpellings: ['রোশন আলী', 'রসন আলী', 'রওশন আলী'],
+      fatherOriginalName: 'আদি পূর্বপুরুষ (মূল বংশধারা)',
       fatherNormalizedName: '',
       motherName: '—',
       spouseNames: ['—'],
-      branchName: 'মূল বংশধারা (রসন আলী)',
-      relationshipLabel: '১ম প্রজন্ম — আদি পূর্বপুরুষ (Root Ancestor)',
+      branchName: 'রোশন আলী মূল বংশধারা',
+      relationshipLabel: '১ম প্রজন্ম — আদি পূর্বপুরুষ (Root Ancestor: রোশন আলী)',
       district: 'ব্রাহ্মণবাড়িয়া',
       upazila: 'নবীনগর',
       mouza: 'গোয়ালী',
       village: 'গোয়ালী',
       jlNo: '৮৪',
       associatedKhatians: ['১১৮'],
-      associatedDags: ['৩৮০', '৪০২'],
-      evidenceIds: ['CS-001', 'WAR-002'],
-      verificationStatus: 'CORROBORATED',
+      associatedDags: ['৬৫১', '৬৫২', '৬৫৩', '৬৫৪'],
+      evidenceIds: ['CS-001', 'WAR-001'],
+      verificationStatus: 'VERIFIED',
       neutralDesignation: 'RECORD-LINKED PERSONS',
     },
     {
       personId: 'GEN-002',
       generation: 2,
-      originalName: 'আলী নেওয়াজ / নাজির আলী নেওয়াজ',
-      normalizedName: normalizeBanglaName('নাজির আলী নেওয়াজ'),
+      originalName: 'নাজির আলী নোয়াজ অথবা আলী নোয়াজ',
+      normalizedName: normalizeBanglaName('নাজির আলী নোয়াজ'),
       variantSpellings: [
-        'আলী নেওয়াজ',
-        'নাজির আলী নেওয়াজ',
-        'মৃত নাজির ওরফে আলী নোয়াজ',
-        'নাজির ওরফে আলী নোয়াজ',
+        'নাজির আলী নোয়াজ',
+        'আলী নোয়াজ',
+        'আলী নোয়াজ',
+        'মৃত নাজির ওরফে আলী নোয়াজ',
+        'নাজির ওরফে আলী নোয়াজ',
       ],
-      fatherOriginalName: 'রসন আলী',
-      fatherNormalizedName: normalizeBanglaName('রসন আলী'),
+      fatherOriginalName: 'রোশন আলী',
+      fatherNormalizedName: normalizeBanglaName('রোশন আলী'),
       motherName: '—',
-      spouseNames: ['পরিচ্ছারের নেছা'],
+      spouseNames: ['পরিষ্কারের নেছা'],
       parentPersonId: 'GEN-001',
-      branchName: 'আলী নেওয়াজ শাখা',
-      relationshipLabel: '২য় প্রজন্ম — রসন আলীর পুত্র',
+      branchName: 'নাজির আলী নোয়াজ / আলী নোয়াজ শাখা',
+      relationshipLabel: '২য় প্রজন্ম — রোশন আলীর পুত্র (সনদে: মৃত নাজির ওরফে আলী নোয়াজ)',
       district: 'ব্রাহ্মণবাড়িয়া',
       upazila: 'নবীনগর',
       mouza: 'গোয়ালী',
       village: 'গোয়ালী',
       jlNo: '৮৪',
       associatedKhatians: ['১১৮'],
-      associatedDags: ['৩৮০', '৪০২'],
-      evidenceIds: ['CS-001', 'WAR-002'],
+      associatedDags: ['৬৫১', '৬৫২', '৬৫৩', '৬৫৪'],
+      evidenceIds: ['CS-001', 'WAR-001'],
       verificationStatus: 'VERIFIED',
       neutralDesignation: 'RECORD-LINKED PERSONS',
     },
@@ -205,21 +218,21 @@ export function buildMasterGenealogyLedger(): GenealogyPersonNode[] {
       originalName: 'সফর আলী',
       normalizedName: normalizeBanglaName('সফর আলী'),
       variantSpellings: ['সফর আলী', 'মৃত সফর আলী', 'ছফর আলী'],
-      fatherOriginalName: 'মৃত নাজির ওরফে আলী নোয়াজ',
-      fatherNormalizedName: normalizeBanglaName('নাজির ওরফে আলী নোয়াজ'),
-      motherName: 'পরিচ্ছারের নেছা',
+      fatherOriginalName: 'মৃত নাজির ওরফে আলী নোয়াজ (নাজির আলী নোয়াজ / আলী নোয়াজ)',
+      fatherNormalizedName: normalizeBanglaName('নাজির আলী নোয়াজ'),
+      motherName: 'পরিষ্কারের নেছা',
       spouseNames: ['ফুলবানু'],
       parentPersonId: 'GEN-002',
-      branchName: 'সফর আলী শাখা',
-      relationshipLabel: '৩য় প্রজন্ম — আলী নেওয়াজের পুত্র (ওয়ারিশ সনদ #২: ২০২৬৫৪১১৮১২০০০০৩)',
+      branchName: 'সফর আলী মূল শাখা',
+      relationshipLabel: '৩য় প্রজন্ম — নাজির আলী নোয়াজ / আলী নোয়াজের পুত্র (ওয়ারিশান সনদ #১: ২০২৬৫৪১১৮১২০০০০০৩)',
       district: 'ব্রাহ্মণবাড়িয়া',
       upazila: 'নবীনগর',
       mouza: 'গোয়ালী',
       village: 'গোয়ালী',
       jlNo: '৮৪',
       associatedKhatians: ['১১৮', '২৪৫'],
-      associatedDags: ['৪০২', '৬১২'],
-      evidenceIds: ['CS-001', 'SA-001', 'WAR-002'],
+      associatedDags: ['৬৫১', '৬৫২', '৬৫৩', '৬৫৪'],
+      evidenceIds: ['CS-001', 'SA-001', 'WAR-001'],
       verificationStatus: 'VERIFIED',
       neutralDesignation: 'RECORD-LINKED PERSONS',
     },
@@ -228,22 +241,27 @@ export function buildMasterGenealogyLedger(): GenealogyPersonNode[] {
       generation: 4,
       originalName: 'কামদার আলী',
       normalizedName: normalizeBanglaName('কামদার আলী'),
-      variantSpellings: ['কামদার আলী', 'কান্দর আলী', 'মৃত কান্দর আলী'],
+      variantSpellings: [
+        'কামদার আলী',
+        'কানদার আলী (সনদে স্পেলিং মিসটেক)',
+        'কান্দর আলী (সনদে স্পেলিং মিসটেক)',
+        'মৃত কাম্দার আলী (সনদে স্পেলিং মিসটেক)',
+      ],
       fatherOriginalName: 'মৃত সফর আলী',
       fatherNormalizedName: normalizeBanglaName('সফর আলী'),
       motherName: 'ফুলবানু',
-      spouseNames: ['জোহেরা খাতুন', 'মৃত আলফু বিবি'],
+      spouseNames: ['জাহেরা খাতুন'],
       parentPersonId: 'GEN-003',
-      branchName: 'কামদার আলী (কান্দর আলী) শাখা',
-      relationshipLabel: '৪র্থ প্রজন্ম — সফর আলীর পুত্র (সনদ #২ ও সনদ #৫)',
+      branchName: 'কামদার আলী শাখা (সনদে কানদার আলী / কান্দর আলী স্পেলিং মিসটেক সংশোধিত)',
+      relationshipLabel: '৪র্থ প্রজন্ম — সফর আলীর ১ম পুত্র (সনদ #১, সনদ #৬ ও সনদ #৭; সনদে কানদার আলী স্পেলিং মিসটেক, মূলত কামদার আলী)',
       district: 'ব্রাহ্মণবাড়িয়া',
       upazila: 'নবীনগর',
       mouza: 'গোয়ালী',
       village: 'গোয়ালী',
       jlNo: '৮৪',
-      associatedKhatians: ['২৪৫', '৭৮৪'],
-      associatedDags: ['৬১২', '১৫৪০'],
-      evidenceIds: ['SA-001', 'WAR-002', 'WAR-005'],
+      associatedKhatians: ['২৪৫', '৭৮৩', '৭৮৪'],
+      associatedDags: ['৬৫১', '১৫৩৯', '১৫৪০'],
+      evidenceIds: ['SA-001', 'WAR-001', 'WAR-006', 'WAR-007'],
       verificationStatus: 'VERIFIED',
       neutralDesignation: 'RECORD-LINKED PERSONS',
     },
@@ -255,58 +273,61 @@ export function buildMasterGenealogyLedger(): GenealogyPersonNode[] {
       variantSpellings: ['সিরাজ আলী', 'মৃত সিরাজ আলী', 'ছিরাজ আলী'],
       fatherOriginalName: 'মৃত সফর আলী',
       fatherNormalizedName: normalizeBanglaName('সফর আলী'),
-      motherName: 'ফুলবানু (মৃত আলবরের মা)',
-      spouseNames: ['আইমনের নেছা'],
+      motherName: 'মৃত আলবরের মা (ফুলবানু)',
+      spouseNames: ['আইমনের নেছা', 'মৃত বানু বেগম'],
       parentPersonId: 'GEN-003',
       branchName: 'সিরাজ আলী শাখা',
-      relationshipLabel: '৪র্থ প্রজন্ম — সফর আলীর পুত্র (ওয়ারিশ সনদ #৩: ২০২৬৫৪১১৮১২০০০০১)',
+      relationshipLabel: '৪র্থ প্রজন্ম — সফর আলীর ২য় পুত্র (ওয়ারিশান সনদ #২: ২০২৬৫৪১১৮১২০০০০০১)',
       district: 'ব্রাহ্মণবাড়িয়া',
       upazila: 'নবীনগর',
       mouza: 'গোয়ালী',
       village: 'গোয়ালী',
       jlNo: '৮৪',
-      associatedKhatians: ['২৪৫', '৫১০', '৫১১'],
-      associatedDags: ['৬১২', '১১২৪', '১১২৫'],
-      evidenceIds: ['SA-001', 'RS-001', 'WAR-002', 'WAR-003'],
+      associatedKhatians: ['২৪৫', '৫১০', '৫১১', '৭৮৫'],
+      associatedDags: ['৬৫১', '৭৭৫', '১১২৪', '১১২৫', '১৫৪১'],
+      evidenceIds: ['SA-001', 'RS-001', 'WAR-001', 'WAR-002'],
       verificationStatus: 'VERIFIED',
       neutralDesignation: 'RECORD-LINKED PERSONS',
     },
   ];
 
-  // Add Generation 5 & 6 descendants from the 6 official Warish Certificates
+  // Add Generation 5 & 6 descendants strictly from the 8 uploaded certificates
   let seq = 6;
   for (const cert of PROVIDED_WARISH_CERTIFICATES) {
     const evId = `WAR-00${cert.slNo}`;
-    // Ensure deceased ancestor is represented if not already in Gen 3/4
     const existingAncestor = nodes.find(
       (n) => normalizeBanglaName(n.originalName) === normalizeBanglaName(cert.deceasedName)
     );
     let parentId = existingAncestor?.personId;
 
-    if (!existingAncestor) {
+    if (!existingAncestor && cert.certificateType !== 'নাগরিকত্ব সনদ') {
       const newAncestorId = `GEN-${String(seq++).padStart(3, '0')}`;
       parentId = newAncestorId;
-      const isKamdarBranch = cert.fatherName.includes('কান্দর') || cert.fatherName.includes('কামদার');
+      const isKamdarBranch =
+        cert.fatherName.includes('কান্দর') ||
+        cert.fatherName.includes('কানদার') ||
+        cert.fatherName.includes('কাম্দার') ||
+        cert.fatherName.includes('কামদার');
       nodes.push({
         personId: newAncestorId,
         generation: 5,
         originalName: cert.deceasedName,
         normalizedName: normalizeBanglaName(cert.deceasedName),
         variantSpellings: [cert.deceasedName, `মৃত ${cert.deceasedName}`],
-        fatherOriginalName: cert.fatherName,
-        fatherNormalizedName: normalizeBanglaName(cert.fatherName),
+        fatherOriginalName: isKamdarBranch ? 'মৃত কামদার আলী (সনদে স্পেলিং মিসটেক: কানদার আলী / কান্দর আলী)' : cert.fatherName,
+        fatherNormalizedName: isKamdarBranch ? normalizeBanglaName('কামদার আলী') : normalizeBanglaName(cert.fatherName),
         motherName: cert.motherName,
         spouseNames: cert.heirs.filter((h) => h.relation.includes('স্ত্রী')).map((h) => h.name),
         parentPersonId: isKamdarBranch ? 'GEN-004' : 'GEN-005',
-        branchName: `${cert.deceasedName} শাখা`,
-        relationshipLabel: `৫ম প্রজন্ম — পিতা: ${cert.fatherName} (সনদ নং ${cert.certificateNo})`,
+        branchName: `${cert.deceasedName} শাখা (${isKamdarBranch ? 'কামদার আলী বংশধারা' : 'সিরাজ আলী বংশধারা'})`,
+        relationshipLabel: `৫ম প্রজন্ম — পিতা: ${isKamdarBranch ? 'কামদার আলী' : cert.fatherName} (${cert.certificateType} নং ${cert.certificateNo})`,
         district: cert.district,
         upazila: cert.upazila,
         mouza: cert.village,
         village: cert.village,
         jlNo: '৮৪',
-        associatedKhatians: ['৫১০', '৫১১', '৭৮৪', '৭৮৫'],
-        associatedDags: ['১১২৪', '১১২৫', '১৫৪০', '১৫৪১'],
+        associatedKhatians: ['৫১০', '৫১১', '৭৮৩', '৭৮৪', '৭৮৫'],
+        associatedDags: ['১১২৪', '১১২৫', '১৫৩৯', '১৫৪০', '১৫৪১'],
         evidenceIds: [evId],
         verificationStatus: 'VERIFIED',
         neutralDesignation: 'RECORD-LINKED PERSONS',
@@ -896,8 +917,8 @@ export function extractInheritanceCertificatePersonsTable(
         issueDate: cert.issueDate,
         issuingAuthority: `ইউনিয়ন পরিষদ চেয়ারম্যান, ${cert.union} ইউনিয়ন, ${cert.upazila}, ${cert.district}`,
         mouzaVillage: `গ্রাম/মৌজা: ${cert.village}, ওয়ার্ড: ${cert.ward}, ডাকঘর: ${cert.postOffice}`,
-        sourceDocument: 'ওয়ারিশ সনদের তালিকা.txt',
-        pageLocation: `ওয়ারিশ সনদ বিবরণ - ${toBengaliNumber(cert.slNo)}, ক্রমিক ${heir.sl}`,
+        sourceDocument: cert.imagePath.split('/').pop() || `${cert.certificateType}_${cert.certificateNo}.jpg`,
+        pageLocation: `${cert.certificateType} #${toBengaliNumber(cert.slNo)}, ক্রমিক ${heir.sl}`,
         evidenceId: evId,
         verificationStatus,
         neutralDesignation: 'RECORD-LINKED PERSONS',
@@ -1296,12 +1317,12 @@ export function buildRecordGapRegister(): RecordGapEntry[] {
       gapCategory: 'Missing Warish Certificate Link',
       mouza: 'গোয়ালী',
       jlNo: '৮৪',
-      affectedKhatianDag: 'SA খতিয়ান ২৪৫ → BRS খতিয়ান ৭৮৪',
-      affectedPersons: 'মৃত কামদার আলী (কান্দর আলী)-এর সকল ওয়ারিশদের পূর্ণ তালিকা',
+      affectedKhatianDag: 'SA খতিয়ান ২৪৫ → BRS খতিয়ান ৭৮৩ ও ৭৮৪',
+      affectedPersons: 'মৃত কামদার আলী (মৃত কাম্দার আলী / কান্দর আলী)-এর সকল ওয়ারিশদের পূর্ণ তালিকা',
       description:
-        'ওয়ারিশ সনদ #২-এ সফর আলীর পুত্র হিসেবে কামদার আলীর নাম এবং সনদ #৫-এ কান্দর আলীর পুত্র আব্দুল কাদিরের ওয়ারিশ সনদ রয়েছে, কিন্তু স্বয়ং কামদার আলীর (কান্দর আলী) নিজস্ব পৃথক ওয়ারিশ সনদ সংযুক্ত নেই।',
-      mandatoryNotice: 'INTERMEDIATE GENERATION WARISH CERTIFICATE NOT PRODUCED — LINEAGE CORROBORATED VIA SON ABDUL KADIR (WAR-005).',
-      evidenceIds: ['WAR-002', 'WAR-005'],
+        'ওয়ারিশান সনদ #১-এ সফর আলীর পুত্র হিসেবে কামদার আলীর নাম, সনদ #৬-এ মৃত কাম্দার আলীর পুত্র আঃ আলীমের উত্তরাধিকারী সনদপত্র (১৭ জন) এবং সনদ #৭-এ কান্দর আলীর পুত্র আব্দুল কাদিরের ওয়ারিশান সনদ (১১ জন) রয়েছে, কিন্তু স্বয়ং কামদার আলীর নিজস্ব পৃথক ওয়ারিশ সনদ সংযুক্ত নেই।',
+      mandatoryNotice: 'INTERMEDIATE GENERATION WARISH CERTIFICATE NOT PRODUCED — LINEAGE CORROBORATED VIA SONS A. ALIM (WAR-006) & ABDUL KADIR (WAR-007).',
+      evidenceIds: ['WAR-001', 'WAR-006', 'WAR-007'],
       status: 'PARTIALLY VERIFIED',
     },
   ];
@@ -1327,36 +1348,36 @@ export function buildContradictionAnomalyReport(): ContradictionAnomalyEntry[] {
       anomalyId: 'ANOM-002',
       anomalyType: 'Father Name Contradiction',
       earlierOrSourceA:
-        'ওয়ারিশ সনদ #২ (সনদ নং ২০২৬৫৪১১৮১২০০০০৩) ও SA খতিয়ান ২৪৫: নাম "কামদার আলী", পিতা- মৃত সফর আলী',
+        'ওয়ারিশান সনদ #১ (সনদ নং ২০২৬৫৪১১৮১২০০০০০৩): সফর আলীর জ্যেষ্ঠ পুত্রের প্রকৃত নাম "কামদার আলী"',
       laterOrSourceB:
-        'ওয়ারিশ সনদ #৫ (সনদ নং ২০২৬১২১৪৮০০০০২১) ও BRS খতিয়ান ৭৮৪: আব্দুল কাদিরের পিতার নাম "কান্দর আলী" এবং মাতার নাম সনদে "জোহেরা খাতুন" কিন্তু খতিয়ান নোটে "মৃত আলফু বিবি"',
+        'উত্তরাধিকারী সনদপত্র #৬ (কাই(দঃ)/ইউপি/২০২৩(৫৩)): আঃ আলীমের পিতার নাম "মৃত কাম্দার আলী" এবং ওয়ারিশান সনদ #৭ (২০২৬১২১৮৫৪০০০০০২১): আব্দুল কাদিরের পিতার নাম "কান্দর আলী / কানদার আলী"',
       neutralFindingSummary:
-        '"কামদার আলী" ও "কান্দর আলী" আঞ্চলিক বানান ভ্যারিয়েন্ট হিসেবে সমর্থিত হলেও আব্দুল কাদিরের মাতার নামের ক্ষেত্রে ওয়ারিশ সনদ #৫ ("জোহেরা খাতুন") ও খতিয়ান বিবরণীর ("আলফু বিবি") মধ্যে অমিল রয়েছে, যা প্রাথমিক দলিল দ্বারা যাচাইযোগ্য।',
-      evidenceIds: ['WAR-002', 'WAR-005', 'BS-001'],
-      classification: 'CONTRADICTORY RECORDS',
+        'সংশ্লিষ্ট সনদে "কানদার আলী / কান্দর আলী / কাম্দার আলী" হিসেবে স্পেলিং মিসটেক (করণিক বানান ভুল) হয়েছে; মূলত প্রকৃত নাম হলো "কামদার আলী" (পিতা: মৃত সফর আলী)। ফলে আঃ আলীম (১৭ জন উত্তরাধিকারী) ও আব্দুল কাদির (১১ জন ওয়ারিশ) উভয়েই কামদার আলীর বৈধ বংশধর।',
+      evidenceIds: ['WAR-001', 'WAR-006', 'WAR-007'],
+      classification: 'VERIFIED',
     },
     {
       anomalyId: 'ANOM-003',
       anomalyType: 'Father Name Contradiction',
       earlierOrSourceA:
-        'ওয়ারিশ সনদ #৩ (সনদ নং ২০২৬৫৪১১৮১২০০০০১): সিরাজ আলীর স্ত্রী ও সন্তানদের মাতার নাম "মৃত আইমনের নেছা"',
+        'ওয়ারিশান সনদ #২ (সনদ নং ২০২৬৫৪১১৮১২০০০০০১): সিরাজ আলীর স্ত্রীর নাম "আইমনের নেছা" এবং মাতার নাম "মৃত আলবরের মা"',
       laterOrSourceB:
-        'ওয়ারিশ সনদ #৬ (সনদ নং ২০২৬১২১৪৮০০০০০৫): নোয়াব মিয়ার (পিতা- মৃত সিরাজ আলী) মাতার নাম "মৃত বানু বেগম"',
+        'ওয়ারিশান সনদ #৫ (সনদ নং ২০২৬১২১৮৫৪০০০০০০৫): নোয়াব মিয়ার (পিতা- মৃত সিরাজ আলী) মাতার নাম "মৃত বানু বেগম"',
       neutralFindingSummary:
-        'সিরাজ আলীর পুত্র নোয়াব মিয়ার মাতার নাম সনদ #৩ অনুযায়ী "আইমনের নেছা" হলেও সনদ #৬-এ "মৃত বানু বেগম" লিপিবদ্ধ। এটি একাদিক্রমে একাধিক স্ত্রী অথবা লিপিকর ত্রুটি হতে পারে — Record Anomaly হিসেবে চিহ্নিত।',
-      evidenceIds: ['WAR-003', 'WAR-006'],
+        'সিরাজ আলীর পুত্র নোয়াব মিয়ার মাতার নাম সনদ #২ অনুযায়ী "আইমনের নেছা" হলেও সনদ #৫-এ "মৃত বানু বেগম" লিপিবদ্ধ। এটি একাধিক স্ত্রী অথবা ডাকনামের ভিন্নতা হিসেবে ফরেনসিক অডিটে চিহ্নিত।',
+      evidenceIds: ['WAR-002', 'WAR-005'],
       classification: 'CONTRADICTORY RECORDS',
     },
     {
       anomalyId: 'ANOM-004',
       anomalyType: 'Unexplained Name Omission',
       earlierOrSourceA:
-        'ওয়ারিশ সনদ #৫ (মৃত আব্দুল কাদির): মোট ১১ জন ওয়ারিশ (স্ত্রী শাহারা খাতুন ও ১০ সন্তান); মৃত্যু তারিখ ঘর খালি',
+        'উত্তরাধিকারী সনদপত্র #৬ (মৃত আঃ আলীম — ১৭ জন উত্তরাধিকারী) এবং ওয়ারিশান সনদ #৭ (মৃত আব্দুল কাদির — ১১ জন ওয়ারিশ)',
       laterOrSourceB:
-        'BRS খতিয়ান ৭৮৪, দাগ ১৫৪০: কেবল মৃত আব্দুল কাদিরের নাম লিপিবদ্ধ, জীবিত ওয়ারিশদের নামে নামজারি/সংশোধিত খতিয়ান সংযুক্ত নেই',
+        'উভয় সনদেই মৃত পূর্বপুরুষের মৃত্যুর তারিখ ঘর খালি এবং সনদ #৬-এ ১৭ জন উত্তরাধিকারীর কারোরই ভোটার আইডি/জন্মতারিখ লিপিবদ্ধ নেই',
       neutralFindingSummary:
-        'ওয়ারিশ সনদ #৫-এ মৃত আব্দুল কাদিরের মৃত্যুর তারিখ উল্লেখ নেই এবং ১১ জন ওয়ারিশের পৃথক নামজারি খতিয়ান এখনো মাস্টার লেজারে দাখিল হয়নি।',
-      evidenceIds: ['WAR-005', 'BS-001'],
+        'সনদ #৬ ও সনদ #৭-এ মৃত্যু তারিখ উল্লেখ না থাকা এবং সনদ #৬-এ জাতীয় পরিচয়পত্র নম্বর না থাকায় আদালতের প্রমাণের জন্য সহায়ক এনআইডি/জন্মসনদ কপি সংযুক্ত করা আবশ্যক।',
+      evidenceIds: ['WAR-006', 'WAR-007'],
       classification: 'RECORD GAP',
     },
   ];
@@ -1421,36 +1442,36 @@ export function buildInitialMasterLedgerProposals(
         propertyId: 'PROP-GOALI-84-CS118',
         personId: 'GEN-003',
         recordedOwner: 'সফর আলী',
-        fatherName: 'মৃত নাজির ওরফে আলী নোয়াজ',
+        fatherName: 'মৃত নাজির ওরফে আলী নোয়াজ (নাজির আলী নোয়াজ / আলী নোয়াজ)',
         spouseName: 'ফুলবানু',
-        parentDag: '৩৮০',
-        successorDag: '৬১২ (SA)',
+        parentDag: '—',
+        successorDag: '৬৫১ (SA)',
         parentKhatian: 'আদি তৌজি ১০২',
         successorKhatian: '২৪৫ (SA)',
-        genealogyRelationship: 'রসন আলী → আলী নেওয়াজ → সফর আলী (৩য় প্রজন্ম)',
-        inheritanceCertificateReference: 'সনদ নং ২০২৬৫৪১১৮১২০০০০৩ (WAR-002)',
+        genealogyRelationship: 'রোশন আলী → নাজির আলী নোয়াজ / আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী',
+        inheritanceCertificateReference: 'সনদ নং ২০২৬৫৪১১৮১২০০০০০৩ (WAR-001)',
         recordedOwnership: 'সফর আলী (১৬ আনা / ১.০০০০ অংশ)',
-        claimedOwnership: 'ওয়ারিশ সূত্রে কামদার আলী ও সিরাজ আলী শাখা',
-        inheritanceRelationshipStatus: 'ওয়ারিশ সনদ #২ দ্বারা সমর্থিত (৩ জন ওয়ারিশ)',
+        claimedOwnership: 'ওয়ারিশ সূত্রে কামদার আলী ও সিরাজ আলী এবং তদীয় বংশধরগণ',
+        inheritanceRelationshipStatus: 'ওয়ারিশান সনদ #১ দ্বারা সমর্থিত (৩ জন ওয়ারিশ)',
         mutationStatus: 'SA খতিয়ান ২৪৫-এ নামান্তরিত',
-        physicalPossession: 'পৈতৃক বসতভিটা (গোয়ালী)',
-        currentRecordStatus: 'RS ৫১০/৫১১ ও BRS ৭৮৪/৭৮৫-এ চলমান',
+        physicalPossession: 'পৈতৃক বসতভিটা ও নাল জমি (গোয়ালী)',
+        currentRecordStatus: 'RS ৫১০/৫১১ ও BRS ৭৮৩/৭৮৪/৭৮৫-এ চলমান',
         evidenceStatus: 'VERIFIED',
-        evidenceId: 'CS-001, WAR-002',
-        sourceDocument: csRec.fileName || 'CS_Goali_(JL_84)_Kh_118_Dag_402.pdf',
+        evidenceId: 'CS-001, WAR-001',
+        sourceDocument: csRec.fileName || 'CS_Goali_(JL_84)_Kh_118_Dag_651.pdf',
         pageNumber: 'পৃষ্ঠা ১',
         recordDate: '১৯১৫ (CS জরিপ)',
         extraAttributes: {
           ...csRec.extraAttributes,
-          'এভিডেন্স আইডি': 'CS-001, WAR-002',
+          'এভিডেন্স আইডি': 'CS-001, WAR-001',
           'বংশলতিকা আইডি': 'GEN-003 (সফর আলী)',
           'প্রমাণ স্ট্যাটাস': 'VERIFIED',
-          'প্যারেন্ট দাগ → পরবর্তী দাগ': '৩৮০ → ৪০২ (CS) → ৬১২ (SA)',
+          'প্যারেন্ট দাগ → পরবর্তী দাগ': '৬৫১ (CS) → ৬৫১ (SA)',
         },
       },
       reasonAndEvidenceSummary:
-        'CS খতিয়ান ১১৮ (দাগ ৪০২)-এর মূল মালিক সফর আলীর নাম অপরিবর্তিত রেখে বংশলতিকা আইডি (GEN-003), ওয়ারিশ সনদ রেফারেন্স (WAR-002) এবং পরবর্তী SA দাগ ৬১২-এর ক্রস-ম্যাপিং মেটাডেটা সংযুক্তির প্রস্তাব।',
-      evidenceIds: ['CS-001', 'WAR-002'],
+        'CS খতিয়ান ১১৮ (দাগ ৬৫১)-এর মূল মালিক সফর আলীর নাম অপরিবর্তিত রেখে বংশলতিকা চেইন (রোশন আলী → নাজির আলী নোয়াজ / আলী নোয়াজ → সফর আলী → কামদার আলী ও সিরাজ আলী), ওয়ারিশান সনদ রেফারেন্স (WAR-001) এবং পরবর্তী SA দাগ ৬৫১-এর ক্রস-ম্যাপিং মেটাডেটা সংযুক্তির প্রস্তাব।',
+      evidenceIds: ['CS-001', 'WAR-001'],
       evidenceStatus: 'VERIFIED',
       approvalState: 'PENDING_REVIEW',
     });
@@ -1608,7 +1629,7 @@ export function runMandatoryForensicTests(
   const resD = matchExtractedPersonAgainstGenealogy(testDEntry, genealogyLedger);
 
   // TEST E: Inheritance certificate containing multiple heirs
-  const cert4 = PROVIDED_WARISH_CERTIFICATES[3]; // মোঃ জাহের মিয়া — ১২ জন ওয়ারিশ
+  const cert4 = PROVIDED_WARISH_CERTIFICATES[3]; // মোঃ জাহের মিয়া — ১২ জন ওয়ারিশ
 
   // TEST J: Scanned handwritten document with uncertain OCR characters
   const testJEntry: ExtractedForensicEntry = {
@@ -1617,12 +1638,12 @@ export function runMandatoryForensicTests(
     evidenceId: 'SLIP-002',
     sourceDocumentName: 'Handwritten_CS_Extract_Scan.jpg',
     documentType: 'Scanned Document / OCR',
-    originalPersonName: 'নাজির ওরফে আলী [অস্পষ্ট] নোয়াজ',
-    normalizedPersonName: normalizeBanglaName('নাজির ওরফে আলী [অস্পষ্ট] নোয়াজ'),
-    fatherOriginalName: 'রসন আলী [পাঠোদ্ধার সম্ভব হয়নি]',
-    fatherNormalizedName: normalizeBanglaName('রসন আলী [পাঠোদ্ধার সম্ভব হয়নি]'),
+    originalPersonName: 'সফর [অস্পষ্ট] আলী',
+    normalizedPersonName: normalizeBanglaName('সফর [অস্পষ্ট] আলী'),
+    fatherOriginalName: 'মৃত নাজির ওরফে আলী নোয়াজ [পাঠোদ্ধার সম্ভব হয়নি]',
+    fatherNormalizedName: normalizeBanglaName('মৃত নাজির ওরফে আলী নোয়াজ [পাঠোদ্ধার সম্ভব হয়নি]'),
     hasOcrUncertainty: true,
-    rawTextExcerpt: 'নাজির ওরফে আলী [অস্পষ্ট] নোয়াজ, পিতা- রসন আলী [পাঠোদ্ধার সম্ভব হয়নি]',
+    rawTextExcerpt: 'সফর [অস্পষ্ট] আলী, পিতা- মৃত নাজির ওরফে আলী নোয়াজ [পাঠোদ্ধার সম্ভব হয়নি]',
   };
   const resJ = matchExtractedPersonAgainstGenealogy(testJEntry, genealogyLedger);
 
@@ -1631,11 +1652,11 @@ export function runMandatoryForensicTests(
       testCode: 'TEST A',
       title: 'Exact Name & Father Name Match (হুবহু নাম ও পিতার নাম ম্যাচ)',
       scenarioDescription:
-        'একই মৌজায় (গোয়ালী, জে.এল. ৮৪) ব্যক্তির নাম "ফিরুজ মিয়া" এবং পিতার নাম "মৃত সিরাজ আলী" বংশলতিকার সাথে যাচাই।',
-      sampleInputSummary: 'নাম: ফিরুজ মিয়া | পিতা: মৃত সিরাজ আলী | মৌজা: গোয়ালী (জে.এল. ৮৪) | খতিয়ান: ৫১০',
+        'একই মৌজায় (গোয়ালী, জে.এল. ৮৪) ব্যক্তির নাম "ফিরুজ মিয়া" এবং পিতার নাম "মৃত সিরাজ আলী" বংশলতিকার সাথে যাচাই।',
+      sampleInputSummary: 'নাম: ফিরুজ মিয়া | পিতা: মৃত সিরাজ আলী | মৌজা: গোয়ালী (জে.এল. ৮৪) | খতিয়ান: ৫১০',
       actualClassification: resA.matchClassification,
       evidenceStatus: resA.evidenceStatus,
-      evidenceIds: ['RS-001', 'WAR-001'],
+      evidenceIds: ['RS-001', 'WAR-003'],
       passed: resA.matchClassification === 'EXACT NAME + FATHER MATCH',
       detailedOutput: `${resA.explanation} (বংশলতিকা আইডি: ${resA.matchedGenealogyPerson?.personId})`,
     },
@@ -1647,7 +1668,7 @@ export function runMandatoryForensicTests(
       sampleInputSummary: 'নাম: কান্দর আলী | পিতা: মৃত ছফর আলী | মৌজা: গোয়ালী (জে.এল. ৮৪)',
       actualClassification: resB.matchClassification,
       evidenceStatus: resB.evidenceStatus,
-      evidenceIds: ['SA-001', 'WAR-005'],
+      evidenceIds: ['SA-001', 'WAR-007'],
       passed: resB.matchClassification === 'VARIANT NAME MATCH',
       detailedOutput: `মূল নাম ("কান্দর আলী") এবং বংশলতিকার নাম ("কামদার আলী") উভয়ই সংরক্ষিত রেখে VARIANT NAME MATCH হিসেবে শনাক্ত।`,
     },
@@ -1680,7 +1701,7 @@ export function runMandatoryForensicTests(
       testCode: 'TEST E',
       title: 'Inheritance Certificate with Multiple Heirs (একাধিক ওয়ারিশ সংবলিত সনদ নিষ্কাশন)',
       scenarioDescription:
-        'ওয়ারিশ সনদ #৪ (মৃত মোঃ জাহের মিয়া, সনদ নং ২০২৬৫৪১১৮১২০০০০০৮) হতে ১২ জন ওয়ারিশকে পৃথক Person ID সহ নিষ্কাশন।',
+        'ওয়ারিশান সনদ #৪ (মৃত মোঃ জাহের মিয়া, সনদ নং ২০২৬৫৪১১৮১২০০০০০৪) হতে ১২ জন ওয়ারিশকে পৃথক Person ID সহ নিষ্কাশন।',
       sampleInputSummary: `মৃত: ${cert4.deceasedName} | সনদ: ${cert4.certificateNo} | মোট ওয়ারিশ: ${toBengaliNumber(
         cert4.heirs.length
       )} জন`,
@@ -1691,7 +1712,7 @@ export function runMandatoryForensicTests(
       evidenceIds: ['WAR-004'],
       passed: cert4.heirs.length === 12,
       detailedOutput:
-        '১২ জন ওয়ারিশকে (রোশেনা বেগম, লাভলী আক্তার, মোঃ ফোরকান মিয়া প্রমুখ) পৃথক Person ID ও "RECORD-LINKED PERSONS" নিরপেক্ষ মর্যাদায় নিষ্কাশন করা হয়েছে।',
+        '১২ জন ওয়ারিশকে (রোশেনা বেগম, লাভলী আক্তার, মোঃ ফোরকান মিয়া প্রমুখ) পৃথক Person ID ও "RECORD-LINKED PERSONS" নিরপেক্ষ মর্যাদায় নিষ্কাশন করা হয়েছে।',
     },
     {
       testCode: 'TEST F',
