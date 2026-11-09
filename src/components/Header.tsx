@@ -15,6 +15,7 @@ import {
   Users,
   Fingerprint,
   Scale,
+  Trash2,
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
 
@@ -33,6 +34,8 @@ interface HeaderProps {
   onOpenApkModal: () => void;
   onQuickPdfDownload: (upazila?: string) => void;
   availableUpazilas: string[];
+  onPurgeCacheNow?: () => void;
+  generatedCacheCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,6 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenApkModal,
   onQuickPdfDownload,
   availableUpazilas,
+  onPurgeCacheNow,
+  generatedCacheCount = 0,
 }) => {
   const [showPdfMenu, setShowPdfMenu] = useState(false);
 
@@ -246,6 +251,20 @@ export const Header: React.FC<HeaderProps> = ({
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden xl:inline">এক্সেল</span>
           </button>
+
+          {/* Auto-Purge Cache on Exit & Instant Purge Button */}
+          {onPurgeCacheNow && (
+            <button
+              onClick={onPurgeCacheNow}
+              title="অ্যাপ থেকে বের হলে সকল ক্যাশকৃত ফাইল স্বয়ংক্রিয়ভাবে মুছে যাবে। তাৎক্ষণিক ক্যাশ মুছতে ক্লিক করুন।"
+              className="p-2 sm:px-2.5 sm:py-2 text-xs font-medium text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden lg:inline">
+                ক্যাশ ক্লিন {generatedCacheCount > 0 ? `(${toBengaliNumber(generatedCacheCount)})` : '(অটো-এক্সিট)'}
+              </span>
+            </button>
+          )}
 
           {/* Ingest Archive Button */}
           <button

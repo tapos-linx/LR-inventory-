@@ -139,6 +139,10 @@ function buildPdfBlobFromCanvases(canvases: HTMLCanvasElement[]): Blob {
     );
     pushBytes(jpegBytes);
     pushStr('\nendstream\nendobj\n');
+
+    // Immediately release offscreen canvas bitmap cache from memory
+    canvas.width = 0;
+    canvas.height = 0;
   }
 
   // Write xref table
@@ -160,7 +164,7 @@ function buildPdfBlobFromCanvases(canvases: HTMLCanvasElement[]): Blob {
 }
 
 /**
- * Triggers a browser file download for a PDF Blob.
+ * Triggers a browser file download for a PDF Blob and immediately schedules cache cleanup.
  */
 function triggerPdfDownload(blob: Blob, fileName: string): void {
   const safeName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
@@ -171,7 +175,7 @@ function triggerPdfDownload(blob: Blob, fileName: string): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

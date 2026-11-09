@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FileSpreadsheet,
   Printer,
@@ -67,6 +67,11 @@ import {
   parseFolderIngestion,
   parseZipIngestion,
 } from './utils/archiveParser';
+import {
+  getSessionCacheInfo,
+  purgeAllAppGeneratedCaches,
+  registerExitCacheCleanup,
+} from './utils/cacheCleaner';
 
 export default function App() {
   // Main Data States
@@ -135,6 +140,27 @@ export default function App() {
   // Quick Home Upload Status
   const [isQuickUploading, setIsQuickUploading] = useState(false);
   const [quickUploadMsg, setQuickUploadMsg] = useState<string | null>(null);
+  const [generatedCacheCount, setGeneratedCacheCount] = useState<number>(0);
+
+  // Automatically delete all app-generated cached files, Blob URLs, IndexedDB, and Cache Storage when exiting the app
+  useEffect(() => {
+    const syncCount = () => {
+      const info = getSessionCacheInfo();
+      setGeneratedCacheCount(info.totalGeneratedFilesCount + info.activeBlobUrlsCount);
+    };
+    const cleanup = registerExitCacheCleanup(syncCount);
+    syncCount();
+    return cleanup;
+  }, []);
+
+  const handlePurgeAllCachedFilesNow = async () => {
+    const stats = await purgeAllAppGeneratedCaches();
+    setGeneratedCacheCount(0);
+    setQuickUploadMsg(
+      `অ্যাপের সকল জেনারেটেড ক্যাশ ফাইল (Blob URLs: ${toBengaliNumber(stats.revokedBlobUrls)}, IndexedDB: ${toBengaliNumber(stats.deletedIndexedDbCount)}, Cache Storage: ${toBengaliNumber(stats.deletedCacheStorageCount)}) সফলভাবে মুছে ফেলা হয়েছে! (অ্যাপ বন্ধ করলেও এটি স্বয়ংক্রিয়ভাবে মুছে যাবে)`
+    );
+    setTimeout(() => setQuickUploadMsg(null), 6000);
+  };
 
   // SLULIS 1-Click Master Download State
   const [isDownloadingSlulisMasterZip, setIsDownloadingSlulisMasterZip] = useState(false);
@@ -596,6 +622,8 @@ export default function App() {
         onOpenApkModal={() => setIsApkModalOpen(true)}
         onQuickPdfDownload={(upz) => handleTriggerQuickPdf(upz, '')}
         availableUpazilas={availableUpazilas}
+        onPurgeCacheNow={handlePurgeAllCachedFilesNow}
+        generatedCacheCount={generatedCacheCount}
       />
 
       {/* Main Workspace Body */}
