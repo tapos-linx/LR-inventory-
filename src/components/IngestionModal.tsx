@@ -9,21 +9,20 @@ import {
   FolderTree,
   Download,
   Loader2,
-  Sparkles,
   Smartphone,
   Files,
-  Printer,
   Layers,
 } from 'lucide-react';
 import { IngestedArchiveNode, IngestionSummary, LandRecord } from '../types/landRecord';
 import {
-  generateSampleArchiveZip,
   parseDirectoryHandleIngestion,
   parseDroppedItemsIngestion,
   parseFolderIngestion,
   parseZipIngestion,
 } from '../utils/archiveParser';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
+import { DEFAULT_COLUMNS } from '../utils/mockData';
+import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface IngestionModalProps {
   isOpen: boolean;
@@ -34,14 +33,12 @@ interface IngestionModalProps {
     tree: IngestedArchiveNode,
     replaceExisting: boolean
   ) => void;
-  onOpenPrintAfterIngest?: () => void;
 }
 
 export const IngestionModal: React.FC<IngestionModalProps> = ({
   isOpen,
   onClose,
   onIngestionComplete,
-  onOpenPrintAfterIngest,
 }) => {
   const [activeTab, setActiveTab] = useState<'folder' | 'mobile' | 'zip'>('folder');
   const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
@@ -51,6 +48,8 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   const [currentStatus, setCurrentStatus] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastSummary, setLastSummary] = useState<IngestionSummary | null>(null);
+  const [lastExtractedRecords, setLastExtractedRecords] = useState<LandRecord[]>([]);
+  const [isPdfDownloading, setIsPdfDownloading] = useState<boolean>(false);
 
   // Callback ref to ensure webkitdirectory & directory attributes are natively attached in DOM
   const setFolderInputAttributes = useCallback((node: HTMLInputElement | null) => {
@@ -78,6 +77,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         setCurrentStatus(`পার্স করা হচ্ছে: ${path.split('/').pop()}`);
       });
       setLastSummary(result.summary);
+      setLastExtractedRecords(result.records);
       setIsProcessing(false);
       onIngestionComplete(result.records, result.summary, result.tree, replaceExisting);
     } catch (err: any) {
@@ -100,6 +100,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         setCurrentStatus(`স্ক্যান হচ্ছে: ${path.split('/').pop()}`);
       });
       setLastSummary(result.summary);
+      setLastExtractedRecords(result.records);
       setIsProcessing(false);
       onIngestionComplete(result.records, result.summary, result.tree, replaceExisting);
     } catch (err: any) {
@@ -122,6 +123,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
           setCurrentStatus(`স্ক্যান হচ্ছে: ${path.split('/').pop()}`);
         });
         setLastSummary(result.summary);
+        setLastExtractedRecords(result.records);
         setIsProcessing(false);
         onIngestionComplete(result.records, result.summary, result.tree, replaceExisting);
       } else {
@@ -166,6 +168,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         setCurrentStatus(`স্ক্যান হচ্ছে: ${path.split('/').pop()}`);
       });
       setLastSummary(result.summary);
+      setLastExtractedRecords(result.records);
       setIsProcessing(false);
       onIngestionComplete(result.records, result.summary, result.tree, replaceExisting);
     } catch (err: any) {
@@ -175,34 +178,17 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     }
   };
 
-  const handleGenerateSampleZip = async () => {
-    setIsProcessing(true);
-    setCurrentStatus('টেস্টিং এর জন্য নমুনা মাস্টার ZIP আর্কাইভ তৈরি হচ্ছে...');
+  const handleDirectDownloadIngestedPdf = async () => {
+    if (lastExtractedRecords.length === 0 || isPdfDownloading) return;
+    setIsPdfDownloading(true);
     try {
-      const zipBlob = await generateSampleArchiveZip();
-      const testFile = new File([zipBlob], 'Master_LR_Records_Sample.zip', {
-        type: 'application/zip',
-      });
-      await handleZipFile(testFile);
-    } catch (err: any) {
-      setErrorMsg(`নমুনা জিপ তৈরি ব্যর্থ: ${err.message}`);
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDownloadSampleZip = async () => {
-    try {
-      const zipBlob = await generateSampleArchiveZip();
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Sample_Master_LR_Records.zip';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setErrorMsg(`নমুনা জিপ ডাউনলোড ব্যর্থ: ${err.message}`);
+      await downloadMouzaLandRecordsPdf(
+        lastExtractedRecords,
+        DEFAULT_COLUMNS,
+        'Uploaded_Master_Records'
+      );
+    } finally {
+      setIsPdfDownloading(false);
     }
   };
 
@@ -512,48 +498,28 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
                 >
                   লেজার টেবিলে দেখুন
                 </button>
-                {onOpenPrintAfterIngest && (
+                {lastExtractedRecords.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenPrintAfterIngest();
-                    }}
-                    className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-lg shadow flex items-center gap-1.5 font-bengali"
+                    onClick={handleDirectDownloadIngestedPdf}
+                    disabled={isPdfDownloading}
+                    className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 disabled:opacity-50 rounded-lg shadow flex items-center gap-1.5 font-bengali"
                   >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>মৌজাভিত্তিক PDF রিপোর্ট দেখুন ও ডাউনলোড করুন</span>
+                    {isPdfDownloading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {isPdfDownloading
+                        ? 'PDF তৈরি হচ্ছে...'
+                        : 'সরাসরি মৌজাভিত্তিক PDF ডাউনলোড (.pdf)'}
+                    </span>
                   </button>
                 )}
               </div>
             </div>
           )}
-
-          {/* Sample Testing Triggers */}
-          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs text-slate-400 font-bengali">
-              ডেমো টেস্ট করতে চান? নমুনা মাল্টি-ফোল্ডার আর্কাইভ ব্যবহার করুন:
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleDownloadSampleZip}
-                className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-[#162035] hover:bg-[#1f2b46] border border-slate-700 rounded-lg transition-colors flex items-center gap-1.5 font-bengali"
-              >
-                <Download className="w-3.5 h-3.5 text-amber-400" />
-                <span>নমুনা ZIP ডাউনলোড</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleGenerateSampleZip}
-                disabled={isProcessing}
-                className="px-3 py-1.5 text-xs font-medium text-amber-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-lg shadow transition-all flex items-center gap-1.5 font-bengali disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>১-ক্লিকে নমুনা ইনজেস্ট</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

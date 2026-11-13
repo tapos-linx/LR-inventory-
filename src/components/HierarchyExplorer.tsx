@@ -7,12 +7,9 @@ import {
   Search,
   Layers,
   Download,
-  Loader2,
 } from 'lucide-react';
 import { LandRecord } from '../types/landRecord';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
-import { DEFAULT_COLUMNS } from '../utils/mockData';
-import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface HierarchyExplorerProps {
   records: LandRecord[];
@@ -21,6 +18,7 @@ interface HierarchyExplorerProps {
   selectedMouza: string;
   onSelectNode: (district: string, upazila: string, mouza: string) => void;
   onClearFilter: () => void;
+  onQuickExportMouza?: (upazila: string, mouza: string) => void;
 }
 
 interface MouzaNode {
@@ -49,9 +47,9 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
   selectedMouza,
   onSelectNode,
   onClearFilter,
+  onQuickExportMouza,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [downloadingScope, setDownloadingScope] = useState<string | null>(null);
   const [expandedDistricts, setExpandedDistricts] = useState<Record<string, boolean>>({
     কুমিল্লা: true,
     ব্রাহ্মণবাড়িয়া: true,
@@ -59,31 +57,9 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
   const [expandedUpazilas, setExpandedUpazilas] = useState<Record<string, boolean>>({
     'কুমিল্লা_আদর্শ সদর': true,
     'ব্রাহ্মণবাড়িয়া_ব্রাহ্মণবাড়িয়া সদর': true,
+    'ব্রাহ্মণবাড়িয়া_নবীনগর': true,
   });
 
-  const handleDownloadHierarchyNodePdf = async (
-    dist: string,
-    upz: string,
-    mouz: string
-  ) => {
-    const scopeKey = `${dist}_${upz}_${mouz}`;
-    if (downloadingScope) return;
-    setDownloadingScope(scopeKey);
-    try {
-      const target = records.filter((r) => {
-        if (dist && r.district !== dist) return false;
-        if (upz && r.upazila !== upz) return false;
-        if (mouz && r.mouza !== mouz) return false;
-        return true;
-      });
-      const label = mouz || upz || dist || 'All_Records';
-      await downloadMouzaLandRecordsPdf(target, DEFAULT_COLUMNS, `Hierarchy_${label}`);
-    } finally {
-      setDownloadingScope(null);
-    }
-  };
-
-  // Build hierarchical map from current records
   const hierarchy = new Map<string, DistrictNode>();
 
   for (const r of records) {
@@ -129,74 +105,54 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
   const isFiltering = !!(selectedDistrict || selectedUpazila || selectedMouza);
 
   return (
-    <div className="bg-[#121827] border border-amber-500/20 rounded-xl flex flex-col h-full overflow-hidden shadow-lg shadow-black/40">
-      {/* Sidebar Header */}
-      <div className="p-3.5 border-b border-slate-800 bg-[#151c2d] flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-bold text-white font-bengali">
-          <Layers className="w-4 h-4 text-amber-400" />
-          <span>প্রশাসনিক হায়ারার্কি ব্রাউজার</span>
+    <div className="surface-3d flex flex-col h-full overflow-hidden">
+      <div className="p-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)] font-bengali">
+          <Layers className="w-4 h-4 text-[var(--accent-gold)]" />
+          <span>প্রশাসনিক হায়ারার্কি</span>
         </div>
         {isFiltering && (
           <button
+            type="button"
             onClick={onClearFilter}
-            className="text-[11px] text-amber-400 hover:text-amber-300 font-bengali hover:underline transition-colors"
+            className="text-[11px] text-[var(--accent-gold)] font-bengali hover:underline transition-colors cursor-pointer"
           >
-            ফিল্টার রিসেট
+            রিসেট
           </button>
         )}
       </div>
 
-      {/* Quick Search */}
-      <div className="p-2.5 border-b border-slate-800 bg-[#0e1422]">
+      <div className="p-2.5 border-b border-[var(--border-subtle)]">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" />
           <input
             type="text"
-            placeholder="জেলা, উপজেলা বা মৌজা খুঁজুন..."
+            placeholder="জেলা, উপজেলা বা মৌজা..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#151d30] border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-bengali"
+            className="w-full bg-[var(--surface-input)] border border-[var(--border-subtle)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-accent)] font-bengali"
           />
         </div>
       </div>
 
-      {/* Tree Content */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1 text-xs">
-        {/* All Records Node */}
-        <div
-          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors font-bengali ${
+        <button
+          type="button"
+          onClick={onClearFilter}
+          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left transition-colors font-bengali cursor-pointer ${
             !isFiltering
-              ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 font-medium'
-              : 'text-slate-300 hover:bg-slate-800/60'
+              ? 'bg-emerald-500/15 text-[var(--accent-emerald)] font-semibold'
+              : 'text-[var(--text-secondary)] hover:bg-[var(--surface-input)]'
           }`}
         >
-          <button
-            onClick={onClearFilter}
-            className="flex items-center gap-2 flex-1 text-left"
-          >
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
+          <span className="flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
             <span>সকল রেকর্ড (সার্বিক ভিউ)</span>
-          </button>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono-num bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
-              {toBengaliNumber(records.length)}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleDownloadHierarchyNodePdf('', '', '')}
-              disabled={downloadingScope === '__'}
-              className="px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold flex items-center gap-0.5"
-              title="সকল রেকর্ডের PDF সরাসরি লোকাল ডিস্কে ডাউনলোড করুন"
-            >
-              {downloadingScope === '__' ? (
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-              ) : (
-                <Download className="w-2.5 h-2.5" />
-              )}
-              <span>PDF</span>
-            </button>
-          </div>
-        </div>
+          </span>
+          <span className="text-[11px] font-mono-num text-[var(--text-muted)]">
+            {toBengaliNumber(records.length)}
+          </span>
+        </button>
 
         {Array.from(hierarchy.entries()).map(([distName, distNode]) => {
           if (
@@ -211,61 +167,44 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
 
           const isDistExpanded = expandedDistricts[distName] ?? true;
           const isDistSelected = selectedDistrict === distName && !selectedUpazila;
-          const distScopeKey = `${distName}__`;
 
           return (
             <div key={distName} className="space-y-0.5">
-              {/* District Row */}
               <div
-                className={`flex items-center justify-between px-2 py-1.5 rounded-lg transition-colors group ${
+                className={`flex items-center justify-between px-2 py-1.5 rounded-xl transition-colors ${
                   isDistSelected
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : 'text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-emerald-500/15 text-[var(--accent-emerald)] font-semibold'
+                    : 'text-[var(--text-primary)] hover:bg-[var(--surface-input)]'
                 }`}
               >
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <button
+                    type="button"
                     onClick={() => toggleDistrict(distName)}
-                    className="p-0.5 text-slate-400 hover:text-white"
+                    className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     {isDistExpanded ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                      <ChevronDown className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
                     ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     )}
                   </button>
-                  <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <MapPin className="w-3.5 h-3.5 text-[var(--accent-gold)] shrink-0" />
                   <button
+                    type="button"
                     onClick={() => onSelectNode(distName, '', '')}
-                    className="text-left font-semibold truncate font-bengali hover:text-amber-300"
+                    className="text-left font-semibold truncate font-bengali cursor-pointer"
                   >
                     জেলা: {distName}
                   </button>
                 </div>
-                <div className="flex items-center gap-1 ml-2 shrink-0">
-                  <span className="text-[10px] font-mono-num text-slate-400">
-                    {toBengaliNumber(distNode.count)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadHierarchyNodePdf(distName, '', '')}
-                    disabled={downloadingScope === distScopeKey}
-                    className="px-1.5 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-0.5"
-                    title={`${distName} জেলার সকল রেকর্ডের PDF লোকাল ডিস্কে ডাউনলোড করুন`}
-                  >
-                    {downloadingScope === distScopeKey ? (
-                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                    ) : (
-                      <Download className="w-2.5 h-2.5" />
-                    )}
-                    <span>PDF</span>
-                  </button>
-                </div>
+                <span className="text-[11px] font-mono-num text-[var(--text-muted)] ml-2 shrink-0">
+                  {toBengaliNumber(distNode.count)}
+                </span>
               </div>
 
-              {/* Upazilas Under District */}
               {isDistExpanded && (
-                <div className="pl-4 space-y-0.5 border-l border-slate-800/80 ml-3 mt-0.5">
+                <div className="pl-4 space-y-0.5 ml-3 mt-0.5">
                   {Array.from(distNode.upazilas.entries()).map(([upzName, upzNode]) => {
                     const upzKey = `${distName}_${upzName}`;
                     const isUpzExpanded = expandedUpazilas[upzKey] ?? true;
@@ -273,111 +212,93 @@ export const HierarchyExplorer: React.FC<HierarchyExplorerProps> = ({
                       selectedDistrict === distName &&
                       selectedUpazila === upzName &&
                       !selectedMouza;
-                    const upzScopeKey = `${distName}_${upzName}_`;
 
                     return (
                       <div key={upzName} className="space-y-0.5">
-                        {/* Upazila Row */}
                         <div
-                          className={`flex items-center justify-between px-2 py-1 rounded-md transition-colors ${
+                          className={`flex items-center justify-between px-2 py-1 rounded-lg transition-colors ${
                             isUpzSelected
-                              ? 'bg-amber-500/15 text-amber-300 font-medium'
-                              : 'text-slate-300 hover:bg-slate-800/40'
+                              ? 'bg-emerald-500/15 text-[var(--accent-emerald)] font-semibold'
+                              : 'text-[var(--text-secondary)] hover:bg-[var(--surface-input)]'
                           }`}
                         >
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
                             <button
+                              type="button"
                               onClick={() => toggleUpazila(upzKey)}
-                              className="p-0.5 text-slate-500 hover:text-white"
+                              className="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                             >
                               {isUpzExpanded ? (
-                                <ChevronDown className="w-3 h-3 text-slate-400" />
+                                <ChevronDown className="w-3 h-3" />
                               ) : (
-                                <ChevronRight className="w-3 h-3 text-slate-500" />
+                                <ChevronRight className="w-3 h-3" />
                               )}
                             </button>
-                            <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                            <Building2 className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
                             <button
+                              type="button"
                               onClick={() => onSelectNode(distName, upzName, '')}
-                              className="text-left truncate font-bengali hover:text-amber-300 text-[11px]"
+                              className="text-left truncate font-bengali text-[11px] cursor-pointer"
                             >
                               উপজেলা: {upzName}
                             </button>
                           </div>
-                          <div className="flex items-center gap-1 ml-1 shrink-0">
-                            <span className="text-[10px] font-mono-num text-slate-500">
-                              {toBengaliNumber(upzNode.count)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadHierarchyNodePdf(distName, upzName, '')}
-                              disabled={downloadingScope === upzScopeKey}
-                              className="px-1 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold flex items-center gap-0.5"
-                              title={`${upzName} উপজেলার সকল রেকর্ডের PDF লোকাল ডিস্কে ডাউনলোড করুন`}
-                            >
-                              {downloadingScope === upzScopeKey ? (
-                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                              ) : (
-                                <Download className="w-2.5 h-2.5" />
-                              )}
-                              <span>PDF</span>
-                            </button>
-                          </div>
+                          <span className="text-[10px] font-mono-num text-[var(--text-muted)] ml-1 shrink-0">
+                            {toBengaliNumber(upzNode.count)}
+                          </span>
                         </div>
 
-                        {/* Mouzas Under Upazila */}
                         {isUpzExpanded && (
-                          <div className="pl-4 space-y-0.5 border-l border-slate-800/60 ml-2 mt-0.5">
+                          <div className="pl-4 space-y-0.5 ml-2 mt-0.5">
                             {Array.from(upzNode.mouzas.entries()).map(([mouzName, mouzNode]) => {
                               const isMouzSelected =
                                 selectedDistrict === distName &&
                                 selectedUpazila === upzName &&
                                 selectedMouza === mouzName;
-                              const mouzScopeKey = `${distName}_${upzName}_${mouzName}`;
 
                               return (
                                 <div
                                   key={mouzName}
-                                  className={`w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors font-bengali text-[11px] ${
+                                  className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left transition-colors font-bengali text-[11px] group ${
                                     isMouzSelected
-                                      ? 'bg-amber-400/20 text-amber-200 border-l-2 border-amber-400 font-medium'
-                                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                                      ? 'bg-amber-400/20 text-[var(--accent-gold)] font-semibold'
+                                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-input)]'
                                   }`}
                                 >
                                   <button
+                                    type="button"
                                     onClick={() => onSelectNode(distName, upzName, mouzName)}
-                                    className="flex items-center gap-1.5 truncate flex-1 text-left"
+                                    className="flex items-center gap-1.5 truncate flex-1 text-left cursor-pointer"
                                   >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/60 shrink-0" />
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                        isMouzSelected ? 'bg-amber-400' : 'bg-emerald-500/50'
+                                      }`}
+                                    />
                                     <span className="truncate">
                                       {mouzName}
                                       {mouzNode.jlNo && (
-                                        <span className="text-[10px] text-slate-500 font-mono-num ml-1">
+                                        <span className="text-[10px] text-[var(--text-muted)] font-mono-num ml-1">
                                           (JL {mouzNode.jlNo})
                                         </span>
                                       )}
                                     </span>
                                   </button>
-                                  <div className="flex items-center gap-1 ml-1 shrink-0">
-                                    <span className="text-[10px] font-mono-num text-slate-400">
+                                  <div className="flex items-center gap-1.5 ml-1 shrink-0">
+                                    <span className="text-[10px] font-mono-num text-[var(--text-muted)]">
                                       {toBengaliNumber(mouzNode.count)}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleDownloadHierarchyNodePdf(distName, upzName, mouzName)
-                                      }
-                                      disabled={downloadingScope === mouzScopeKey}
-                                      className="px-1 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 text-[9px] font-bold flex items-center gap-0.5"
-                                      title={`${mouzName} মৌজার PDF লোকাল ডিস্কে ডাউনলোড করুন`}
-                                    >
-                                      {downloadingScope === mouzScopeKey ? (
-                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                      ) : (
-                                        <Download className="w-2.5 h-2.5" />
-                                      )}
-                                      <span>PDF</span>
-                                    </button>
+                                    {onQuickExportMouza && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onQuickExportMouza(upzName, mouzName)}
+                                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-amber-400/20 text-[var(--accent-gold)] transition-opacity cursor-pointer"
+                                        title={`${mouzName} মৌজা এক্সপোর্ট সেন্টারে খুলুন`}
+                                        aria-label={`${mouzName} মৌজা এক্সপোর্ট`}
+                                      >
+                                        <Download className="w-3 h-3" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               );

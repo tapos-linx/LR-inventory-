@@ -6,16 +6,15 @@ import {
   ArrowUpDown,
   Edit,
   Trash2,
-  FileSpreadsheet,
   Printer,
   ChevronLeft,
   ChevronRight,
   Filter,
   Plus,
   Download,
-  FileText,
   FileJson,
   Loader2,
+  Settings,
 } from 'lucide-react';
 import { DynamicColumn, LandRecord } from '../types/landRecord';
 import {
@@ -24,7 +23,7 @@ import {
   parseAcreValue,
   toBengaliNumber,
 } from '../utils/bengaliNumerals';
-import { exportToCSV, exportToExcel, exportToJSON } from '../utils/exportUtils';
+import { exportToJSON } from '../utils/exportUtils';
 import { downloadMouzaLandRecordsPdf } from '../utils/pdfDownloadEngine';
 
 interface InventoryGridProps {
@@ -44,6 +43,7 @@ interface InventoryGridProps {
   onPrintSelected: () => void;
   onExportSelected: () => void;
   onAddNewRecord: () => void;
+  onOpenColumnCustomizer?: () => void;
 }
 
 export const InventoryGrid: React.FC<InventoryGridProps> = ({
@@ -61,15 +61,14 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
   onDeleteRecord,
   onDeleteSelected,
   onPrintSelected,
-  onExportSelected,
   onAddNewRecord,
+  onOpenColumnCustomizer,
 }) => {
   const [sortField, setSortField] = useState<string>('slNo');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [density, setDensity] = useState<'compact' | 'normal' | 'spacious'>('normal');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [downloadingRowId, setDownloadingRowId] = useState<string | null>(null);
 
   const visibleColumns = columns.filter((c) => c.visible).sort((a, b) => a.order - b.order);
@@ -127,25 +126,6 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
       newSet.add(id);
     }
     setSelectedIds(newSet);
-  };
-
-  const handleDownloadGridPdf = async (onlySelected = false) => {
-    if (isDownloadingPdf) return;
-    const target = onlySelected
-      ? sortedRecords.filter((r) => selectedIds.has(r.id))
-      : sortedRecords;
-    if (target.length === 0) return;
-
-    setIsDownloadingPdf(true);
-    try {
-      await downloadMouzaLandRecordsPdf(
-        target,
-        columns,
-        onlySelected ? 'Selected_Records' : 'Master_Ledger'
-      );
-    } finally {
-      setIsDownloadingPdf(false);
-    }
   };
 
   const handleDownloadSingleRowPdf = async (rec: LandRecord) => {
@@ -257,48 +237,6 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
             ))}
           </select>
 
-          {/* Direct Local Disk Save Buttons for Active Ledger */}
-          <button
-            onClick={() => handleDownloadGridPdf(false)}
-            disabled={isDownloadingPdf || sortedRecords.length === 0}
-            className="px-2.5 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 disabled:opacity-50 rounded-lg flex items-center gap-1 shadow transition-all font-bengali"
-            title="বর্তমান লেজার তালিকাটি PDF হিসেবে লোকাল ডিস্কে সেভ করুন"
-          >
-            {isDownloadingPdf ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-            )}
-            <span>লেজার PDF (.pdf)</span>
-          </button>
-
-          <button
-            onClick={() => exportToExcel(sortedRecords, columns, 'LR_Master_Ledger')}
-            className="px-2.5 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
-            title="বর্তমান লেজার তালিকাটি Excel (.xlsx) হিসেবে লোকাল ডিস্কে সেভ করুন"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Excel</span>
-          </button>
-
-          <button
-            onClick={() => exportToCSV(sortedRecords, columns, 'LR_Master_Ledger')}
-            className="px-2 py-1.5 text-xs font-semibold text-sky-300 bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
-            title="বর্তমান লেজার তালিকাটি CSV হিসেবে লোকাল ডিস্কে সেভ করুন"
-          >
-            <FileText className="w-3.5 h-3.5 text-sky-400" />
-            <span>CSV</span>
-          </button>
-
-          <button
-            onClick={() => exportToJSON(sortedRecords, 'LR_Master_Ledger')}
-            className="px-2 py-1.5 text-xs font-semibold text-purple-300 bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/40 rounded-lg flex items-center gap-1 transition-colors font-bengali"
-            title="বর্তমান লেজার তালিকাটি JSON হিসেবে লোকাল ডিস্কে সেভ করুন"
-          >
-            <FileJson className="w-3.5 h-3.5 text-purple-400" />
-            <span>JSON</span>
-          </button>
-
           {/* Density Switcher */}
           <div className="hidden xl:flex items-center bg-[#0d1322] border border-slate-700/80 rounded-lg p-0.5 font-bengali">
             <button
@@ -330,6 +268,18 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
             </button>
           </div>
 
+          {onOpenColumnCustomizer && (
+            <button
+              type="button"
+              onClick={onOpenColumnCustomizer}
+              className="p-1.5 text-slate-300 hover:text-amber-300 bg-[#0d1322] border border-slate-700/80 rounded-lg transition-colors cursor-pointer"
+              title="কলাম কনফিগারেশন (দৃশ্যমানতা ও কাস্টম কলাম)"
+              aria-label="কলাম সেটিংস"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Add New Record Button */}
           <button
             onClick={onAddNewRecord}
@@ -341,73 +291,33 @@ export const InventoryGrid: React.FC<InventoryGridProps> = ({
         </div>
       </div>
 
-      {/* Batch Selection Action Bar (Appears when items are selected) */}
+      {/* Contextual Batch Selection Action Bar (Appears when rows are checked) */}
       {selectedIds.size > 0 && (
         <div className="bg-[#1b253b] border-b border-amber-500/30 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs font-bengali transition-all">
           <div className="flex items-center gap-2 text-amber-300">
             <CheckSquare className="w-4 h-4 text-amber-400" />
             <span className="font-semibold">
-              {toBengaliNumber(selectedIds.size)} টি রেকর্ড নির্বাচিত — সরাসরি লোকাল ডিস্কে সেভ করুন:
+              {toBengaliNumber(selectedIds.size)} টি রেকর্ড নির্বাচিত
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => handleDownloadGridPdf(true)}
-              disabled={isDownloadingPdf}
-              className="px-2.5 py-1 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded flex items-center gap-1.5 transition-colors shadow"
-            >
-              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>নির্বাচিত PDF ডাউনলোড (.pdf)</span>
-            </button>
-            <button
               onClick={onPrintSelected}
-              className="px-2.5 py-1 text-xs font-medium text-slate-200 bg-[#25324e] hover:bg-[#2d3d5e] border border-slate-600 rounded flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg flex items-center gap-1.5 transition-colors shadow cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>নির্বাচিত প্রিন্ট ভিউ (A4)</span>
-            </button>
-            <button
-              onClick={onExportSelected}
-              className="px-2.5 py-1 text-xs font-medium text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-500/40 rounded flex items-center gap-1.5 transition-colors"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>নির্বাচিত Excel (.xlsx)</span>
-            </button>
-            <button
-              onClick={() =>
-                exportToCSV(
-                  sortedRecords.filter((r) => selectedIds.has(r.id)),
-                  columns,
-                  'LR_Master_Ledger_Selected'
-                )
-              }
-              className="px-2.5 py-1 text-xs font-medium text-sky-300 bg-sky-950/40 hover:bg-sky-950/60 border border-sky-500/40 rounded flex items-center gap-1.5 transition-colors"
-            >
-              <FileText className="w-3.5 h-3.5 text-sky-400" />
-              <span>নির্বাচিত CSV</span>
-            </button>
-            <button
-              onClick={() =>
-                exportToJSON(
-                  sortedRecords.filter((r) => selectedIds.has(r.id)),
-                  'LR_Master_Ledger_Selected'
-                )
-              }
-              className="px-2.5 py-1 text-xs font-medium text-purple-300 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-500/40 rounded flex items-center gap-1.5 transition-colors"
-            >
-              <FileJson className="w-3.5 h-3.5 text-purple-400" />
-              <span>নির্বাচিত JSON</span>
+              <Printer className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>নির্বাচিত প্রিন্ট (A4)</span>
             </button>
             <button
               onClick={onDeleteSelected}
-              className="px-2.5 py-1 text-xs font-medium text-red-300 bg-red-950/40 hover:bg-red-950/60 border border-red-500/40 rounded flex items-center gap-1.5 transition-colors"
+              className="px-2.5 py-1 text-xs font-medium text-red-300 bg-red-950/40 hover:bg-red-950/60 border border-red-500/40 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-400" />
               <span>মুছে ফেলুন</span>
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="text-slate-400 hover:text-white px-2 py-1"
+              className="text-slate-400 hover:text-white px-2 py-1 cursor-pointer"
             >
               বাছাই বাতিল
             </button>

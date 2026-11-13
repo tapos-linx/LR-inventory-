@@ -1,54 +1,19 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  FileSpreadsheet,
-  Printer,
-  UploadCloud,
-  Layers,
-  Database,
-  CheckCircle2,
-  PieChart,
-  MapPin,
-  ShieldCheck,
-  Download,
-  Building2,
-  Smartphone,
-  FolderArchive,
-  Files,
-  FileArchive,
-  Loader2,
-  RotateCcw,
-  Users,
-  FileCheck2,
-  Fingerprint,
-  Scale,
-  Split,
-} from 'lucide-react';
-import { Header } from './components/Header';
-import { HierarchyExplorer } from './components/HierarchyExplorer';
-import { InventoryGrid } from './components/InventoryGrid';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FileDown } from 'lucide-react';
+import { Header, WorkspaceView } from './components/Header';
+import { HomeDashboard } from './components/HomeDashboard';
+import { BrowseWorkspace } from './components/BrowseWorkspace';
+import { MatchWorkspace, MatchWorkspaceTab } from './components/MatchWorkspace';
+import { ExportCenter } from './components/ExportCenter';
+import { SettingsPanel, ThemeMode } from './components/SettingsPanel';
 import { IngestionModal } from './components/IngestionModal';
 import { ColumnCustomizerModal } from './components/ColumnCustomizerModal';
 import { RecordDetailModal } from './components/RecordDetailModal';
 import { PrintReportView } from './components/PrintReportView';
-import { ArchiveTreeView } from './components/ArchiveTreeView';
 import { ApkDownloadModal } from './components/ApkDownloadModal';
-import { InheritanceMatcherView } from './components/InheritanceMatcherView';
-import { ForensicAuditView, ReportTabId } from './components/ForensicAuditView';
-import { SingleLineageInvestigationView, SlulisTabId } from './components/SingleLineageInvestigationView';
-import { SlulisStatusSummary } from './components/SlulisStatusSummary';
-import { LocalDiskDownloadCenter } from './components/LocalDiskDownloadCenter';
-import { downloadMasterSlulisPackage } from './utils/slulisMasterBundleEngine';
-import { REPOSITORY_CONFIG } from './config/repository';
+import { ReportTabId } from './components/ForensicAuditView';
+import { SlulisTabId } from './components/SingleLineageInvestigationView';
 import { LedgerAuditVersionEntry } from './types/forensic';
-import {
-  PROVIDED_WARISH_CERTIFICATES,
-  matchLandRecordsWithInheritance,
-  convertMatchedListToLandRecords,
-} from './utils/inheritanceData';
-import {
-  downloadMatchedInheritancePdf,
-  downloadMouzaLandRecordsPdf,
-} from './utils/pdfDownloadEngine';
 import {
   DynamicColumn,
   IngestedArchiveNode,
@@ -56,12 +21,8 @@ import {
   LandRecord,
 } from './types/landRecord';
 import { DEFAULT_COLUMNS, INITIAL_MOCK_RECORDS } from './utils/mockData';
-import { exportToCSV, exportToExcel } from './utils/exportUtils';
-import {
-  formatAreaBengali,
-  parseAcreValue,
-  toBengaliNumber,
-} from './utils/bengaliNumerals';
+import { exportToExcel } from './utils/exportUtils';
+import { parseAcreValue, toBengaliNumber } from './utils/bengaliNumerals';
 import {
   buildArchiveFileTree,
   parseFolderIngestion,
@@ -74,7 +35,7 @@ import {
 } from './utils/cacheCleaner';
 
 export default function App() {
-  // Main Data States
+  // Main Data States (100% client-side, zero missing records)
   const [records, setRecords] = useState<LandRecord[]>(INITIAL_MOCK_RECORDS);
   const [columns, setColumns] = useState<DynamicColumn[]>(() => {
     const extraKeys = new Set<string>();
@@ -103,29 +64,45 @@ export default function App() {
     )
   );
 
-  // Selection & Views
+  // Theme Mode (Dark / Light / System)
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const applyTheme = (isDark: boolean) => {
+      root.classList.toggle('dark', isDark);
+      root.classList.toggle('light', !isDark);
+    };
+
+    if (themeMode === 'dark') {
+      applyTheme(true);
+      return;
+    }
+    if (themeMode === 'light') {
+      applyTheme(false);
+      return;
+    }
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    applyTheme(media.matches);
+    const handler = (e: MediaQueryListEvent) => applyTheme(e.matches);
+    media.addEventListener('change', handler);
+    return () => media.removeEventListener('change', handler);
+  }, [themeMode]);
+
+  // Selection & 4-Pillar Navigation States
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeView, setActiveView] = useState<
-    'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis'
-  >('ledger');
-  const [slulisInitialTab, setSlulisInitialTab] = useState<SlulisTabId>('summary');
-  const [forensicInitialTab, setForensicInitialTab] = useState<ReportTabId>('report2');
+  const [activeView, setActiveView] = useState<WorkspaceView>('home');
+  const [matchInitialTab, setMatchInitialTab] = useState<MatchWorkspaceTab>('inheritance');
+  const [matchNavKey, setMatchNavKey] = useState<number>(0);
+  const [slulisInitialTab] = useState<SlulisTabId>('summary');
+  const [forensicInitialTab] = useState<ReportTabId>('report2');
 
-  const handleNavigateToSlulis = (tab?: string) => {
-    if (tab) {
-      setSlulisInitialTab(tab as SlulisTabId);
-    }
-    setActiveView('slulis');
-  };
-
-  const handleNavigateToForensic = (tab?: string) => {
-    if (tab) {
-      setForensicInitialTab(tab as ReportTabId);
-    }
-    setActiveView('forensic');
-  };
   const [printUpazilaScope, setPrintUpazilaScope] = useState<string>('');
   const [printMouzaScope, setPrintMouzaScope] = useState<string>('');
+  const [exportUpazilaScope, setExportUpazilaScope] = useState<string>('');
+  const [exportMouzaScope, setExportMouzaScope] = useState<string>('');
+
   const [versionHistory, setVersionHistory] = useState<LedgerAuditVersionEntry[]>(() => [
     {
       versionId: 'VER-INIT-001',
@@ -137,7 +114,7 @@ export default function App() {
     },
   ]);
 
-  // Quick Home Upload Status
+  // Quick Home Upload & Cache Cleaner States
   const [isQuickUploading, setIsQuickUploading] = useState(false);
   const [quickUploadMsg, setQuickUploadMsg] = useState<string | null>(null);
   const [generatedCacheCount, setGeneratedCacheCount] = useState<number>(0);
@@ -157,32 +134,9 @@ export default function App() {
     const stats = await purgeAllAppGeneratedCaches();
     setGeneratedCacheCount(0);
     setQuickUploadMsg(
-      `অ্যাপের সকল জেনারেটেড ক্যাশ ফাইল (Blob URLs: ${toBengaliNumber(stats.revokedBlobUrls)}, IndexedDB: ${toBengaliNumber(stats.deletedIndexedDbCount)}, Cache Storage: ${toBengaliNumber(stats.deletedCacheStorageCount)}) সফলভাবে মুছে ফেলা হয়েছে! (অ্যাপ বন্ধ করলেও এটি স্বয়ংক্রিয়ভাবে মুছে যাবে)`
+      `অ্যাপের সকল জেনারেটেড ক্যাশ ফাইল (Blob URLs: ${toBengaliNumber(stats.revokedBlobUrls)}, IndexedDB: ${toBengaliNumber(stats.deletedIndexedDbCount)}, Cache Storage: ${toBengaliNumber(stats.deletedCacheStorageCount)}) সফলভাবে মুছে ফেলা হয়েছে!`
     );
     setTimeout(() => setQuickUploadMsg(null), 6000);
-  };
-
-  // SLULIS 1-Click Master Download State
-  const [isDownloadingSlulisMasterZip, setIsDownloadingSlulisMasterZip] = useState(false);
-  const [slulisZipMsg, setSlulisZipMsg] = useState<string | null>(null);
-
-  const handleDownloadHomeSlulisZip = async () => {
-    if (isDownloadingSlulisMasterZip) return;
-    setIsDownloadingSlulisMasterZip(true);
-    setSlulisZipMsg('মাস্টার প্যাকেজ জিপ তৈরি হচ্ছে...');
-    try {
-      await downloadMasterSlulisPackage(records, (step, pct) => {
-        setSlulisZipMsg(`${step} (${pct}%)`);
-      });
-      setSlulisZipMsg('সফলভাবে ১-ক্লিকে সকল নথি মাস্টার ডাউনলোড সম্পন্ন হয়েছে!');
-      setTimeout(() => setSlulisZipMsg(null), 5000);
-    } catch (err) {
-      console.error('Failed to download SLULIS bundle:', err);
-      setSlulisZipMsg('ডাউনলোডে ত্রুটি দেখা দিয়েছে');
-      setTimeout(() => setSlulisZipMsg(null), 5000);
-    } finally {
-      setIsDownloadingSlulisMasterZip(false);
-    }
   };
 
   // Filter States
@@ -193,7 +147,8 @@ export default function App() {
   const [selectedSurveyType, setSelectedSurveyType] = useState('');
   const [selectedLandClass, setSelectedLandClass] = useState('');
 
-  // Modals
+  // Modals & Slide-Over Panels
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIngestOpen, setIsIngestOpen] = useState(false);
   const [isColCustomizerOpen, setIsColCustomizerOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<LandRecord | null>(null);
@@ -201,29 +156,13 @@ export default function App() {
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
 
-  // Callback ref to ensure webkitdirectory is set natively on the home page quick-folder input
-  const setHomeFolderAttributes = useCallback((node: HTMLInputElement | null) => {
-    if (node) {
-      node.setAttribute('webkitdirectory', '');
-      node.setAttribute('directory', '');
-      node.setAttribute('mozdirectory', '');
-      node.setAttribute('multiple', '');
-    }
-  }, []);
-
   // Distinct Upazilas & Mouzas across all records
-  const availableUpazilas = Array.from(new Set(records.map((r) => r.upazila))).filter(Boolean);
-  const availableMouzasForScope = Array.from(
-    new Set(
-      (printUpazilaScope
-        ? records.filter((r) => r.upazila === printUpazilaScope)
-        : records
-      ).map((r) => r.mouza)
-    )
-  ).filter(Boolean);
+  const availableUpazilas = useMemo(
+    () => Array.from(new Set(records.map((r) => r.upazila))).filter(Boolean),
+    [records]
+  );
 
-  // Group Mouza summaries for the Home Page Mouza-Best PDF Implementation Hub
-  const mouzaCards = React.useMemo(() => {
+  const mouzaCards = useMemo(() => {
     const map = new Map<
       string,
       {
@@ -231,7 +170,6 @@ export default function App() {
         jlNo: string;
         upazila: string;
         district: string;
-        surveys: Set<string>;
         count: number;
         totalAcre: number;
       }
@@ -245,14 +183,12 @@ export default function App() {
           jlNo: r.jlNo,
           upazila: r.upazila,
           district: r.district,
-          surveys: new Set([r.surveyType]),
           count: 0,
           totalAcre: 0,
         });
       }
       const entry = map.get(key)!;
       entry.count++;
-      entry.surveys.add(r.surveyType);
       entry.totalAcre += parseAcreValue(r.area);
     }
 
@@ -260,46 +196,89 @@ export default function App() {
   }, [records]);
 
   // Filtering Logic
-  const filteredRecords = records.filter((rec) => {
-    if (selectedDistrict && rec.district !== selectedDistrict) return false;
-    if (selectedUpazila && rec.upazila !== selectedUpazila) return false;
-    if (selectedMouza && rec.mouza !== selectedMouza) return false;
-    if (selectedSurveyType && rec.surveyType !== selectedSurveyType) return false;
-    if (selectedLandClass && rec.landClass !== selectedLandClass) return false;
+  const filteredRecords = useMemo(() => {
+    return records.filter((rec) => {
+      if (selectedDistrict && rec.district !== selectedDistrict) return false;
+      if (selectedUpazila && rec.upazila !== selectedUpazila) return false;
+      if (selectedMouza && rec.mouza !== selectedMouza) return false;
+      if (selectedSurveyType && rec.surveyType !== selectedSurveyType) return false;
+      if (selectedLandClass && rec.landClass !== selectedLandClass) return false;
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchKhatian = rec.khatianNo?.toLowerCase().includes(q);
-      const matchDag = rec.dagNo?.toLowerCase().includes(q);
-      const matchOwner = rec.ownerDetails?.toLowerCase().includes(q);
-      const matchMouza = rec.mouza?.toLowerCase().includes(q);
-      const matchDistrict = rec.district?.toLowerCase().includes(q);
-      const matchUpazila = rec.upazila?.toLowerCase().includes(q);
-      const matchRemarks = rec.remarks?.toLowerCase().includes(q);
-      const matchExtra = Object.values(rec.extraAttributes || {}).some((v) =>
-        String(v).toLowerCase().includes(q)
-      );
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchKhatian = rec.khatianNo?.toLowerCase().includes(q);
+        const matchDag = rec.dagNo?.toLowerCase().includes(q);
+        const matchOwner = rec.ownerDetails?.toLowerCase().includes(q);
+        const matchMouza = rec.mouza?.toLowerCase().includes(q);
+        const matchDistrict = rec.district?.toLowerCase().includes(q);
+        const matchUpazila = rec.upazila?.toLowerCase().includes(q);
+        const matchRemarks = rec.remarks?.toLowerCase().includes(q);
+        const matchExtra = Object.values(rec.extraAttributes || {}).some((v) =>
+          String(v).toLowerCase().includes(q)
+        );
 
-      return (
-        matchKhatian ||
-        matchDag ||
-        matchOwner ||
-        matchMouza ||
-        matchDistrict ||
-        matchUpazila ||
-        matchRemarks ||
-        matchExtra
-      );
+        return (
+          matchKhatian ||
+          matchDag ||
+          matchOwner ||
+          matchMouza ||
+          matchDistrict ||
+          matchUpazila ||
+          matchRemarks ||
+          matchExtra
+        );
+      }
+
+      return true;
+    });
+  }, [
+    records,
+    selectedDistrict,
+    selectedUpazila,
+    selectedMouza,
+    selectedSurveyType,
+    selectedLandClass,
+    searchQuery,
+  ]);
+
+  // Overview Metrics (All records on Home, filtered in Browse)
+  const totalKhatianCount = useMemo(
+    () => new Set(records.map((r) => `${r.mouza}_${r.khatianNo}`)).size,
+    [records]
+  );
+  const totalDagCount = useMemo(
+    () => new Set(records.map((r) => `${r.mouza}_${r.dagNo}`)).size,
+    [records]
+  );
+  const totalAcreValue = useMemo(
+    () => records.reduce((acc, r) => acc + parseAcreValue(r.area), 0),
+    [records]
+  );
+
+  // Navigation Helpers
+  const handleNavigateMatch = (tab: MatchWorkspaceTab = 'inheritance') => {
+    setMatchInitialTab(tab);
+    setMatchNavKey((k) => k + 1);
+    setActiveView('match');
+  };
+
+  const handleJumpToExportCenter = (upazila?: string, mouza?: string) => {
+    setExportUpazilaScope(upazila || '');
+    setExportMouzaScope(mouza || '');
+    setActiveView('export');
+  };
+
+  const handleQuickSearchJump = (query: string, upazila?: string, mouza?: string) => {
+    if (upazila !== undefined || mouza !== undefined) {
+      setSelectedDistrict('');
+      setSelectedUpazila(upazila || '');
+      setSelectedMouza(mouza || '');
+      setSearchQuery(query);
+    } else {
+      setSearchQuery(query);
     }
-
-    return true;
-  });
-
-  // Calculate Metrics
-  const totalKhatianCount = new Set(filteredRecords.map((r) => `${r.mouza}_${r.khatianNo}`)).size;
-  const totalDagCount = new Set(filteredRecords.map((r) => `${r.mouza}_${r.dagNo}`)).size;
-  const totalAcreValue = filteredRecords.reduce((acc, r) => acc + parseAcreValue(r.area), 0);
-  const verifiedCount = filteredRecords.filter((r) => r.verified).length;
+    setActiveView('browse');
+  };
 
   // Ingestion Handler (Preserves 100% of uploaded records — zero missing)
   const handleIngestionComplete = (
@@ -321,6 +300,8 @@ export default function App() {
     setSelectedMouza('');
     setPrintUpazilaScope('');
     setPrintMouzaScope('');
+    setExportUpazilaScope('');
+    setExportMouzaScope('');
 
     // Dynamic Schema update
     if (summary.extraColumnsDetected.length > 0) {
@@ -393,10 +374,10 @@ export default function App() {
     const newRec: LandRecord = {
       id: `rec-${Date.now()}`,
       slNo: records.length + 1,
-      district: selectedDistrict || 'কুমিল্লা',
-      upazila: selectedUpazila || 'আদর্শ সদর',
-      mouza: selectedMouza || 'বরাইচারা',
-      jlNo: '১০৪',
+      district: selectedDistrict || 'ব্রাহ্মণবাড়িয়া',
+      upazila: selectedUpazila || 'নবীনগর',
+      mouza: selectedMouza || 'গোয়ালী',
+      jlNo: '৮৪',
       surveyType: 'RS',
       khatianNo: toBengaliNumber(records.length + 10),
       dagNo: toBengaliNumber(records.length + 150),
@@ -437,46 +418,10 @@ export default function App() {
     setSelectedIds(new Set());
   };
 
-  // Export Handlers
-  const handleExportExcelAll = () => {
-    exportToExcel(filteredRecords, columns, 'LR_Master_Ledger_Full');
-  };
-
   const handleExportExcelSelected = () => {
     const toExport = records.filter((r) => selectedIds.has(r.id));
     if (toExport.length === 0) return;
     exportToExcel(toExport, columns, 'LR_Master_Ledger_Selected');
-  };
-
-  const handleExportCSVAll = () => {
-    exportToCSV(filteredRecords, columns, 'LR_Master_Ledger_Full');
-  };
-
-  const handleTriggerQuickPdf = (upazila?: string, mouza?: string) => {
-    setPrintUpazilaScope(upazila || '');
-    setPrintMouzaScope(mouza || '');
-    setActiveView('print');
-  };
-
-  // Direct 1-Click Local Disk .PDF Save for any Mouza or Upazila Scope
-  const handleDirectSaveMouzaPdfToDisk = async (upazila?: string, mouza?: string) => {
-    setIsQuickUploading(true);
-    const scopeName = mouza || upazila || 'All_Mouzas';
-    setQuickUploadMsg(`${scopeName}-এর খতিয়ান ও দাগ রেজিস্টার .PDF ফাইল লোকাল ডিস্কে সেভ হচ্ছে...`);
-    try {
-      const target = records.filter((r) => {
-        if (upazila && r.upazila !== upazila) return false;
-        if (mouza && r.mouza !== mouza) return false;
-        return true;
-      });
-      await downloadMouzaLandRecordsPdf(target, columns, scopeName);
-      setQuickUploadMsg(
-        `সফলভাবে "${scopeName}" (${toBengaliNumber(target.length)} টি রেকর্ড)-এর .PDF ফাইল লোকাল ডিস্কে সেভ হয়েছে!`
-      );
-      setTimeout(() => setQuickUploadMsg(null), 7000);
-    } finally {
-      setIsQuickUploading(false);
-    }
   };
 
   const handleResetToSample = () => {
@@ -488,7 +433,7 @@ export default function App() {
     setSearchQuery('');
   };
 
-  // Apply the new matched list (Land Records + Matched Warish Certificate Data) to the Master Ledger
+  // Apply the matched list (Land Records + Matched Warish Certificate Data) to the Master Ledger
   const handleApplyMatchedListToLedger = (
     matchedRecords: LandRecord[],
     openPrintAfter = false
@@ -501,7 +446,6 @@ export default function App() {
     setSelectedUpazila('');
     setSelectedMouza('');
 
-    // Ensure Warish Certificate extra columns are visible in the Master Ledger & PDF Report
     const warishExtraKeys = [
       'ওয়ারিশ সনদ নং',
       'মৃত পূর্বসূরি',
@@ -538,38 +482,7 @@ export default function App() {
     }
   };
 
-  // 1-Click Instant Match & Load from Home Screen
-  const handleInstantMatchAndLoad = (strictOnly: boolean) => {
-    const matched = matchLandRecordsWithInheritance(
-      records,
-      PROVIDED_WARISH_CERTIFICATES,
-      strictOnly
-    );
-    const enriched = convertMatchedListToLandRecords(matched);
-    handleApplyMatchedListToLedger(enriched, false);
-  };
-
-  // 1-Click Direct PDF File Download of the Matched Inheritance List from Home Screen
-  const handleDirectDownloadMatchedPdf = async () => {
-    setIsQuickUploading(true);
-    setQuickUploadMsg('ওয়ারিশ সনদের সাথে ম্যাচকৃত নতুন তালিকার PDF ফাইল তৈরি হচ্ছে...');
-    try {
-      const matched = matchLandRecordsWithInheritance(
-        records,
-        PROVIDED_WARISH_CERTIFICATES,
-        false
-      );
-      await downloadMatchedInheritancePdf(matched, 'LR_Warish_Matched_New_List');
-      setQuickUploadMsg(
-        `সফলভাবে ${toBengaliNumber(matched.length)} টি ম্যাচকৃত ওয়ারিশ-খতিয়ান রেকর্ডের PDF ফাইল (.pdf) ডাউনলোড হয়েছে!`
-      );
-      setTimeout(() => setQuickUploadMsg(null), 7000);
-    } finally {
-      setIsQuickUploading(false);
-    }
-  };
-
-  // Forensic Master Ledger Proposal Approval (with Rollback Snapshot — Section 17)
+  // Forensic Master Ledger Proposal Approval (with Rollback Snapshot)
   const handleApproveLedgerProposal = (
     updatedRecords: LandRecord[],
     versionEntry: LedgerAuditVersionEntry
@@ -582,7 +495,7 @@ export default function App() {
     setTimeout(() => setQuickUploadMsg(null), 7000);
   };
 
-  // Rollback Master Ledger to a Previous Snapshot (Section 17)
+  // Rollback Master Ledger to a Previous Snapshot
   const handleRollbackLedgerVersion = (versionEntry: LedgerAuditVersionEntry) => {
     setRecords(versionEntry.previousRecordsSnapshot);
     const rollbackLog: LedgerAuditVersionEntry = {
@@ -598,591 +511,168 @@ export default function App() {
     setTimeout(() => setQuickUploadMsg(null), 7000);
   };
 
-  // Target records for Print View: Ensure 100% of uploaded records are available!
+  // Target records for Print Studio: Selected or all records
   const printTargetRecords =
     selectedIds.size > 0
       ? records.filter((r) => selectedIds.has(r.id))
       : records;
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
-      {/* Top Bar Contract */}
+    <div className="min-h-screen app-body flex flex-col selection:bg-amber-500/30 selection:text-amber-200 transition-colors">
+      {/* Persistent Minimal Header (Logo + Upazila/Mouza Quick Search + Settings Gear) */}
       <Header
         totalRecords={records.length}
-        filteredCount={filteredRecords.length}
-        selectedCount={selectedIds.size}
+        mouzaCount={mouzaCards.length}
         activeView={activeView}
-        setActiveView={setActiveView}
-        onOpenIngest={() => setIsIngestOpen(true)}
-        onOpenColumnCustomizer={() => setIsColCustomizerOpen(true)}
-        onExportExcel={handleExportExcelAll}
-        onExportCSV={handleExportCSVAll}
-        onAddNewRecord={handleOpenNew}
-        onResetToSample={handleResetToSample}
-        onOpenApkModal={() => setIsApkModalOpen(true)}
-        onQuickPdfDownload={(upz) => handleTriggerQuickPdf(upz, '')}
+        onNavigateHome={() => setActiveView('home')}
+        onQuickSearchJump={handleQuickSearchJump}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
         availableUpazilas={availableUpazilas}
-        onPurgeCacheNow={handlePurgeAllCachedFilesNow}
+        availableMouzas={mouzaCards.map((m) => ({
+          mouza: m.mouza,
+          upazila: m.upazila,
+          count: m.count,
+        }))}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         generatedCacheCount={generatedCacheCount}
       />
 
-      {/* Main Workspace Body */}
-      {activeView === 'slulis' ? (
-        <SingleLineageInvestigationView
+      {/* Pillar 0: 4-Pillar 3D Home Dashboard */}
+      {activeView === 'home' && (
+        <HomeDashboard
           records={records}
-          onBack={() => setActiveView('ledger')}
-          onNavigateToForensic={handleNavigateToForensic}
-          initialTab={slulisInitialTab}
+          mouzaCount={mouzaCards.length}
+          totalKhatianCount={totalKhatianCount}
+          totalDagCount={totalDagCount}
+          totalAcreValue={totalAcreValue}
+          onDirectUpload={handleDirectHomeUpload}
+          onOpenIngestModal={() => setIsIngestOpen(true)}
+          onNavigateBrowse={() => setActiveView('browse')}
+          onNavigateMatch={(tab) => handleNavigateMatch(tab || 'inheritance')}
+          onNavigateExport={() => handleJumpToExportCenter('', '')}
+          isQuickUploading={isQuickUploading}
+          quickUploadMsg={quickUploadMsg}
+          onClearQuickMsg={() => setQuickUploadMsg(null)}
         />
-      ) : activeView === 'print' ? (
+      )}
+
+      {/* Pillar 2: Unified Browse Workspace (Hierarchy Explorer + Inventory Grid + Column Gear) */}
+      {activeView === 'browse' && (
+        <BrowseWorkspace
+          records={records}
+          filteredRecords={filteredRecords}
+          columns={columns}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
+          selectedDistrict={selectedDistrict}
+          selectedUpazila={selectedUpazila}
+          selectedMouza={selectedMouza}
+          onSelectHierarchyNode={handleSelectHierarchyNode}
+          onClearHierarchyFilter={handleClearHierarchyFilter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedSurveyType={selectedSurveyType}
+          setSelectedSurveyType={setSelectedSurveyType}
+          selectedLandClass={selectedLandClass}
+          setSelectedLandClass={setSelectedLandClass}
+          onEditRecord={handleOpenEdit}
+          onDeleteRecord={handleDeleteRecord}
+          onDeleteSelected={handleDeleteSelected}
+          onPrintSelected={() => {
+            setPrintUpazilaScope(selectedUpazila);
+            setPrintMouzaScope(selectedMouza);
+            setActiveView('print');
+          }}
+          onExportSelected={handleExportExcelSelected}
+          onAddNewRecord={handleOpenNew}
+          onOpenColumnCustomizer={() => setIsColCustomizerOpen(true)}
+          onJumpToExportCenter={handleJumpToExportCenter}
+        />
+      )}
+
+      {/* Pillar 3: Unified Match Workspace (Inheritance Matcher + 11-Step Forensic Audit + SLULIS) */}
+      {activeView === 'match' && (
+        <MatchWorkspace
+          key={matchNavKey}
+          records={records}
+          columns={columns}
+          initialTab={matchInitialTab}
+          forensicInitialTab={forensicInitialTab}
+          slulisInitialTab={slulisInitialTab}
+          onBackHome={() => setActiveView('home')}
+          onApplyMatchedListToLedger={handleApplyMatchedListToLedger}
+          onApproveLedgerProposal={handleApproveLedgerProposal}
+          onRollbackLedgerVersion={handleRollbackLedgerVersion}
+          versionHistory={versionHistory}
+        />
+      )}
+
+      {/* Pillar 4: Unified 1-Click Export Center */}
+      {activeView === 'export' && (
+        <ExportCenter
+          records={records}
+          filteredRecords={filteredRecords}
+          selectedIds={selectedIds}
+          columns={columns}
+          availableUpazilas={availableUpazilas}
+          initialUpazila={exportUpazilaScope}
+          initialMouza={exportMouzaScope}
+          onOpenPrintStudio={(upz, mouz) => {
+            setPrintUpazilaScope(upz);
+            setPrintMouzaScope(mouz);
+            setActiveView('print');
+          }}
+        />
+      )}
+
+      {/* Interactive A4 Print Studio (reached via Export Center or Grid Selected A4 Print) */}
+      {activeView === 'print' && (
         <PrintReportView
           records={printTargetRecords}
           columns={columns}
-          onBack={() => setActiveView('ledger')}
+          onBack={() => setActiveView('export')}
           initialSelectedUpazila={printUpazilaScope}
           initialSelectedMouza={printMouzaScope}
         />
-      ) : activeView === 'inheritance' ? (
-        <InheritanceMatcherView
-          records={records}
-          columns={columns}
-          onBack={() => setActiveView('ledger')}
-          onApplyMatchedListToLedger={handleApplyMatchedListToLedger}
-        />
-      ) : activeView === 'forensic' ? (
-        <ForensicAuditView
-          records={records}
-          onBack={() => setActiveView('ledger')}
-          onApproveLedgerProposal={handleApproveLedgerProposal}
-          versionHistory={versionHistory}
-          onRollbackLedgerVersion={handleRollbackLedgerVersion}
-          initialTab={forensicInitialTab}
-        />
-      ) : (
-        <main className="flex-1 max-w-[1720px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col space-y-4">
-          {/* SLULIS: Universal Single-Lineage Land Investigation Hub Banner */}
-          <section className="bg-gradient-to-r from-[#1b1509] via-[#241c0b] to-[#141d33] border-2 border-amber-500/50 rounded-xl p-4 sm:p-5 shadow-2xl font-bengali relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-amber-500/10 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-950/60 shrink-0 ring-2 ring-amber-300/50">
-                  <Scale className="w-6 h-6 stroke-[2.5]" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/70 border border-amber-500/40 px-2 py-0.5 rounded">
-                      SLULIS — সর্বমৌজা একক বংশধারা তদন্ত সিস্টেম
-                    </span>
-                    <span className="text-xs bg-red-950/60 text-red-300 border border-red-500/40 px-2 py-0.5 rounded font-mono">
-                      দাগ ৬৫১ (৮০ শতক গরমিল) · দাগ ৬৫৪ (ভিটাবাড়ি)
-                    </span>
-                  </div>
-                  <h2 className="text-base sm:text-lg font-bold text-white">
-                    সফর আলী বংশধারা সর্বমৌজা খতিয়ান চেইন, জমি বেদখল/জালিয়াতি তদন্ত ও দেওয়ানি মোকদ্দমা ড্রাফটিং
-                  </h2>
-                  <p className="text-xs text-slate-300 max-w-4xl">
-                    গোয়ালী মৌজা ও অন্যান্য সকল মৌজায় CS → SA → RS → BS/BRS খতিয়ান চেইন ম্যাপিং, ১২টি বংশগত গরমিল বিশ্লেষণ, ৮ শ্রেণির তৃতীয় পক্ষ অনুপ্রবেশ শনাক্তকরণ, মুসলিম ফারায়েজ ও কোর্ট-রেডি ২৭ দফা দেওয়ানি আরজি ও ১৪টি আইনি পরিশিষ্ট।
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  onClick={() => setActiveView('slulis')}
-                  className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-sm shadow-xl flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Scale className="w-4 h-4 stroke-[2.5] text-slate-950" />
-                  <span>SLULIS তদন্ত ও মোকদ্দমা স্টুডিও</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveView('slulis')}
-                  className="px-3.5 py-2.5 rounded-lg bg-[#19243d] hover:bg-[#233254] border border-amber-500/40 text-amber-300 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
-                  title="দাগ ৬৫১ ও অন্যান্য দাগের পাশাপাশি জরিপ পরিবর্তন ও গরমিল দেখুন"
-                >
-                  <Split className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
-                  <span>দাগ ৬৫১ পাশাপাশি জরিপ তুলনা (Side-by-Side)</span>
-                </button>
-
-                <button
-                  onClick={handleDownloadHomeSlulisZip}
-                  disabled={isDownloadingSlulisMasterZip}
-                  className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-xl flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60"
-                  title="১-ক্লিকে সকল আরজি, ১৪টি পরিশিষ্ট, ১১-শিট এক্সেল ও ফরেনসিক অডিট রিপোর্ট জিপ ফাইল হিসেবে ডাউনলোড করুন"
-                >
-                  {isDownloadingSlulisMasterZip ? (
-                    <Loader2 className="w-4 h-4 text-slate-950 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                  )}
-                  <span>১-ক্লিকে SLULIS সকল নথি মাস্টার ডাউনলোড (.ZIP)</span>
-                </button>
-              </div>
-
-              {slulisZipMsg && (
-                <div className="w-full bg-emerald-950/80 border border-emerald-500/50 rounded-lg p-2.5 flex items-center gap-2 text-xs text-emerald-200 font-semibold shadow-inner mt-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{slulisZipMsg}</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* SLULIS Status Summary: Forensic Audit & Litigation Drafts Aggregator */}
-          <SlulisStatusSummary
-            records={records}
-            onNavigateToSlulis={handleNavigateToSlulis}
-            onNavigateToForensic={handleNavigateToForensic}
-            onNavigateToSideBySide={() => handleNavigateToSlulis('compare')}
-            onDownloadMasterBundle={handleDownloadHomeSlulisZip}
-            isDownloadingMasterBundle={isDownloadingSlulisMasterZip}
-          />
-
-          {/* Quick Direct Phone Memory & Subfolder Upload Bar (No Modal Required!) */}
-          <section className="bg-gradient-to-r from-[#141d33] via-[#18233c] to-[#12192c] border border-amber-500/40 rounded-xl p-3.5 sm:p-4 shadow-xl font-bengali">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-                  <UploadCloud className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 flex-wrap">
-                    <span>ফোন মেমোরি ও সাব-ফোল্ডার ডিরেক্ট আপলোড (Phone & Folder Upload)</span>
-                    <span className="text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
-                      সকল সাব-ফোল্ডার সাপোর্ট
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-300">
-                    আপনার ফোনে বা পিসিতে ডাউনলোড করা সম্পূর্ণ ফোল্ডার, একাধিক ফাইল (PDF, ছবি, Excel, CSV) অথবা ZIP সরাসরি এখান থেকেই সিলেক্ট করুন।
-                  </p>
-                </div>
-              </div>
-
-              {/* Native <label> Upload Buttons directly on the Home Screen for 100% Mobile Compatibility */}
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="cursor-pointer px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all">
-                  <FolderArchive className="w-4 h-4 stroke-[2.5]" />
-                  <span>ফোল্ডার ও সাব-ফোল্ডার নির্বাচন</span>
-                  <input
-                    type="file"
-                    ref={setHomeFolderAttributes}
-                    className="sr-only"
-                    onChange={(e) => {
-                      handleDirectHomeUpload(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-
-                <label className="cursor-pointer px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all">
-                  <Files className="w-4 h-4 stroke-[2.5]" />
-                  <span>ফোন মেমোরি ফাইল / ZIP নির্বাচন</span>
-                  <input
-                    type="file"
-                    multiple
-                    className="sr-only"
-                    onChange={(e) => {
-                      handleDirectHomeUpload(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-
-                <button
-                  onClick={() => setIsIngestOpen(true)}
-                  className="px-3 py-2 rounded-lg bg-[#1d2944] hover:bg-[#263556] border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                >
-                  অ্যাডভান্সড অপশন
-                </button>
-
-                <button
-                  onClick={handleResetToSample}
-                  title="নমুনা ডাটা রিসেট করুন"
-                  className="p-2 rounded-lg bg-[#161f33] hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-amber-300 transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {(isQuickUploading || quickUploadMsg) && (
-              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2 text-emerald-300 font-semibold">
-                  {isQuickUploading ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  )}
-                  <span>{quickUploadMsg}</span>
-                </div>
-                {!isQuickUploading && (
-                  <button
-                    onClick={() => handleTriggerQuickPdf('', '')}
-                    className="px-3 py-1 bg-amber-400 text-slate-950 font-bold rounded text-xs hover:bg-amber-300"
-                  >
-                    মৌজাভিত্তিক PDF দেখুন →
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Inheritance (Warish Certificate) Matching & New Matched List Hub */}
-          <section className="bg-gradient-to-r from-[#0e221d] via-[#122624] to-[#11192a] border border-emerald-500/40 rounded-xl p-3.5 sm:p-4 shadow-lg font-bengali">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 flex-wrap">
-                    <span>আপলোডকৃত ৮টি উত্তরাধিকার/ওয়ারিশ সনদ ও খতিয়ান ম্যাচকৃত তালিকা (Inheritance List Matcher)</span>
-                    <span className="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded">
-                      ৮টি আপলোডকৃত সনদ · ৬৭ জন সনদভুক্ত ওয়ারিশ (গ্রাম: গোয়ালী, নবীনগর)
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-300">
-                    আপনার আপলোডকৃত ৮টি সনদের (সফর আলী, সিরাজ আলী, ফিরুজ মিয়া, মোঃ জাহের মিয়া, নোয়াব মিয়া, আঃ আলীম, আব্দুল কাদির এবং মোঃ টিটুর নাগরিকত্ব সনদ) তথ্য হুবহু এক্সট্রাক্ট করে সংযুক্ত করা হয়েছে এবং সনদের বাইরের অন্যান্য তথ্য বাতিল করা হয়েছে।
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleDirectDownloadMatchedPdf}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1.5 transition-all"
-                >
-                  <Download className="w-4 h-4 stroke-[2.5] text-slate-950" />
-                  <span>ম্যাচকৃত নতুন তালিকা PDF ডাউনলোড (.pdf)</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveView('inheritance')}
-                  className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
-                >
-                  <FileCheck2 className="w-4 h-4 stroke-[2.5]" />
-                  <span>ওয়ারিশ ম্যাচকৃত নতুন তালিকা দেখুন ({toBengaliNumber(records.length)} টি)</span>
-                </button>
-
-                <button
-                  onClick={() => handleInstantMatchAndLoad(false)}
-                  className="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-semibold transition-colors"
-                >
-                  ১-ক্লিকে সকল রেকর্ড ওয়ারিশসহ লেজারে যুক্ত করুন
-                </button>
-
-                <button
-                  onClick={() => handleInstantMatchAndLoad(true)}
-                  className="px-3 py-2 rounded-lg bg-[#162336] hover:bg-[#1e304a] border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                >
-                  শুধু গোয়ালী মৌজার ওয়ারিশ ম্যাচ লোড করুন
-                </button>
-
-                <button
-                  onClick={() => setActiveView('forensic')}
-                  className="px-3.5 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all"
-                >
-                  <Fingerprint className="w-4 h-4" />
-                  <span>ফরেনসিক ম্যাচিং ও বংশলতিকা ইঞ্জিন (Forensic Audit)</span>
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Top Metric Cards */}
-          <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
-              <div className="space-y-0.5 font-bengali">
-                <span className="text-[11px] text-slate-400 font-medium">সর্বমোট খতিয়ান সংখ্যা</span>
-                <div className="text-xl sm:text-2xl font-bold font-mono-num text-amber-300">
-                  {toBengaliNumber(totalKhatianCount)}
-                </div>
-                <div className="text-[10px] text-slate-400">অনন্য খতিয়ান লেজার</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <Database className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
-              <div className="space-y-0.5 font-bengali">
-                <span className="text-[11px] text-slate-400 font-medium">সর্বমোট দাগ / প্লট</span>
-                <div className="text-xl sm:text-2xl font-bold font-mono-num text-slate-100">
-                  {toBengaliNumber(totalDagCount)}
-                </div>
-                <div className="text-[10px] text-slate-400">স্বতন্ত্র প্লট ম্যাপিং</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <PieChart className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
-              <div className="space-y-0.5 font-bengali">
-                <span className="text-[11px] text-slate-400 font-medium">মোট জমির আয়তন</span>
-                <div className="text-base sm:text-lg font-bold font-mono-num text-emerald-400 truncate">
-                  {toBengaliNumber(totalAcreValue.toFixed(4))} একর
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  {(totalAcreValue * 100).toFixed(1)} শতাংশ সমান
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <Layers className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="bg-[#121827] border border-amber-500/20 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-lg shadow-black/30">
-              <div className="space-y-0.5 font-bengali">
-                <span className="text-[11px] text-slate-400 font-medium">মোট মৌজা ও রেকর্ড</span>
-                <div className="text-xl sm:text-2xl font-bold font-mono-num text-amber-200">
-                  {toBengaliNumber(mouzaCards.length)} মৌজা ({toBengaliNumber(filteredRecords.length)})
-                </div>
-                <div className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 inline" />
-                  <span>১০০% রেকর্ড অন্তর্ভুক্ত</span>
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-            </div>
-          </section>
-
-          {/* Unified Local Disk Document Save Hub for All 6 Document Categories */}
-          <LocalDiskDownloadCenter
-            records={records}
-            filteredRecords={filteredRecords}
-            columns={columns}
-            archiveTree={archiveTree}
-          />
-
-          {/* Mouza-Best PDF Implementation Hub (মৌজাভিত্তিক মাস্টার PDF হাব) */}
-          <section className="bg-[#121827] border border-amber-500/30 rounded-xl p-4 shadow-lg space-y-3 font-bengali">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                  <Printer className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
-                    <span>মৌজাভিত্তিক মাস্টার PDF হাব (Mouza-Best PDF Generator)</span>
-                    <span className="text-[10px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">
-                      প্রতিটি মৌজার পৃথক টেবিল · ০% মিসিং রেকর্ড
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    যেকোনো একক মৌজা অথবা সমগ্র উপজেলার সকল মৌজার পৃথক টেবিল সংবলিত A4 Landscape PDF রিপোর্ট সরাসরি লোকাল ডিস্কে সেভ বা প্রিন্ট করুন।
-                  </p>
-                </div>
-              </div>
-
-              {/* Upazila + Mouza Selectors + Direct Local Disk Save & Print Buttons */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                  <Building2 className="w-3.5 h-3.5 text-amber-400" />
-                  <select
-                    value={printUpazilaScope}
-                    onChange={(e) => {
-                      setPrintUpazilaScope(e.target.value);
-                      setPrintMouzaScope('');
-                    }}
-                    className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
-                  >
-                    <option value="" className="bg-[#121827] text-slate-200">
-                      সকল উপজেলা ({toBengaliNumber(records.length)} রেকর্ড)
-                    </option>
-                    {availableUpazilas.map((u) => (
-                      <option key={u} value={u} className="bg-[#121827] text-slate-200">
-                        {u} উপজেলা ({toBengaliNumber(records.filter((r) => r.upazila === u).length)} রেকর্ড)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 bg-[#0b0f19] border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                  <select
-                    value={printMouzaScope}
-                    onChange={(e) => setPrintMouzaScope(e.target.value)}
-                    className="bg-transparent text-emerald-300 font-semibold focus:outline-none cursor-pointer"
-                  >
-                    <option value="" className="bg-[#121827] text-slate-200">
-                      সকল মৌজা (পৃথক টেবিলে)
-                    </option>
-                    {availableMouzasForScope.map((m) => (
-                      <option key={m} value={m} className="bg-[#121827] text-slate-200">
-                        মৌজা: {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={() =>
-                    handleDirectSaveMouzaPdfToDisk(printUpazilaScope, printMouzaScope)
-                  }
-                  className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
-                  title="সরাসরি লোকাল ডিস্কে .PDF ফাইল হিসেবে সেভ করুন"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                  <span>
-                    {printMouzaScope
-                      ? `${printMouzaScope} মৌজার .PDF ডিস্কে সেভ`
-                      : 'সরাসরি মৌজা .PDF ডিস্কে সেভ'}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => handleTriggerQuickPdf(printUpazilaScope, printMouzaScope)}
-                  className="px-3.5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-[0.98] rounded-lg shadow-md flex items-center gap-1.5 transition-all"
-                >
-                  <Printer className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                  <span>প্রিন্ট স্টুডিও ভিউ</span>
-                </button>
-
-                <a
-                  href={REPOSITORY_CONFIG.fallbackApkDownloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-2 text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
-                  title="GitHub Repository থেকে সরাসরি .APK ডাউনলোড করুন"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>GitHub .APK ডাউনলোড</span>
-                </a>
-
-                <button
-                  onClick={() => setIsApkModalOpen(true)}
-                  className="px-3 py-2 text-xs font-medium text-amber-300 bg-[#1e2a44] hover:bg-[#273757] border border-amber-500/40 rounded-lg flex items-center gap-1.5 transition-colors"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                  <span>ফোনে ইনস্টল ও APK হাব</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Individual Mouza Quick-PDF & Local Disk Save Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
-              {mouzaCards.map((mc) => {
-                const mouzaSpecificRecords = records.filter(
-                  (r) => r.upazila === mc.upazila && r.mouza === mc.mouza
-                );
-                return (
-                  <div
-                    key={`${mc.upazila}_${mc.mouza}`}
-                    className="bg-[#0e1422] border border-slate-800 hover:border-amber-500/40 rounded-lg p-2.5 flex flex-col justify-between gap-2 transition-all"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold text-white truncate">
-                          মৌজা: {mc.mouza}
-                        </span>
-                        <span className="text-[10px] font-mono-num text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
-                          JL {mc.jlNo}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {mc.upazila}, {mc.district}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-300 pt-1.5 border-t border-slate-800/80">
-                      <span className="font-mono-num text-[10px]">
-                        {toBengaliNumber(mc.count)} রেকর্ড · {toBengaliNumber(mc.totalAcre.toFixed(2))} একর
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleDirectSaveMouzaPdfToDisk(mc.upazila, mc.mouza)}
-                          className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded text-[10px] flex items-center gap-0.5 transition-colors"
-                          title="এই মৌজার PDF সরাসরি লোকাল ডিস্কে সেভ করুন"
-                        >
-                          <Download className="w-2.5 h-2.5" />
-                          <span>.PDF</span>
-                        </button>
-                        <button
-                          onClick={() =>
-                            exportToExcel(
-                              mouzaSpecificRecords,
-                              columns,
-                              `LR_Mouza_${mc.mouza}`
-                            )
-                          }
-                          className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold rounded text-[10px] flex items-center gap-0.5 transition-colors"
-                          title="এই মৌজার Excel সরাসরি লোকাল ডিস্কে সেভ করুন"
-                        >
-                          <FileSpreadsheet className="w-2.5 h-2.5" />
-                          <span>.XLSX</span>
-                        </button>
-                        <button
-                          onClick={() => handleTriggerQuickPdf(mc.upazila, mc.mouza)}
-                          className="px-1.5 py-0.5 bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 font-semibold rounded text-[10px] flex items-center gap-0.5 transition-colors"
-                          title="প্রিন্ট ভিউ ওপেন করুন"
-                        >
-                          <Printer className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Core Content Area */}
-          {activeView === 'tree' ? (
-            <ArchiveTreeView
-              tree={archiveTree}
-              records={records}
-              onSelectRecord={handleOpenEdit}
-              onOpenIngest={() => setIsIngestOpen(true)}
-            />
-          ) : (
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-h-[600px]">
-              {/* Left Side: Administrative Hierarchy Explorer */}
-              <div className="lg:col-span-3 h-[680px]">
-                <HierarchyExplorer
-                  records={records}
-                  selectedDistrict={selectedDistrict}
-                  selectedUpazila={selectedUpazila}
-                  selectedMouza={selectedMouza}
-                  onSelectNode={handleSelectHierarchyNode}
-                  onClearFilter={handleClearHierarchyFilter}
-                />
-              </div>
-
-              {/* Right Side: Interactive Dynamic Schema Inventory Grid */}
-              <div className="lg:col-span-9 h-[680px] flex flex-col">
-                <InventoryGrid
-                  records={filteredRecords}
-                  columns={columns}
-                  selectedIds={selectedIds}
-                  setSelectedIds={setSelectedIds}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  selectedSurveyType={selectedSurveyType}
-                  setSelectedSurveyType={setSelectedSurveyType}
-                  selectedLandClass={selectedLandClass}
-                  setSelectedLandClass={setSelectedLandClass}
-                  onEditRecord={handleOpenEdit}
-                  onDeleteRecord={handleDeleteRecord}
-                  onDeleteSelected={handleDeleteSelected}
-                  onPrintSelected={() => setActiveView('print')}
-                  onExportSelected={handleExportExcelSelected}
-                  onAddNewRecord={handleOpenNew}
-                />
-              </div>
-            </div>
-          )}
-        </main>
       )}
+
+      {/* Small Persistent Export Center Floating Action Button */}
+      {activeView !== 'export' && activeView !== 'print' && (
+        <button
+          type="button"
+          onClick={() => handleJumpToExportCenter(selectedUpazila, selectedMouza)}
+          className="fixed bottom-5 right-5 z-30 no-print btn-3d px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 font-bold text-xs shadow-2xl flex items-center gap-2 font-bengali cursor-pointer"
+          title="একীভূত এক্সপোর্ট সেন্টার (PDF, Excel, CSV, JSON, SLULIS .ZIP)"
+        >
+          <FileDown className="w-4 h-4 stroke-[2.4]" />
+          <span>এক্সপোর্ট সেন্টার</span>
+        </button>
+      )}
+
+      {/* Settings Slide-Over Panel (Theme, APK, Sample Tools, Archive Tree, Auto-Exit Cache Purge) */}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        themeMode={themeMode}
+        onChangeTheme={setThemeMode}
+        onOpenApkModal={() => setIsApkModalOpen(true)}
+        onIngestionComplete={handleIngestionComplete}
+        onResetToSample={handleResetToSample}
+        archiveTree={archiveTree}
+        records={records}
+        onSelectRecord={handleOpenEdit}
+        onOpenIngestModal={() => setIsIngestOpen(true)}
+        onPurgeCacheNow={handlePurgeAllCachedFilesNow}
+        generatedCacheCount={generatedCacheCount}
+        columns={columns}
+      />
 
       {/* Ingestion Engine Modal (Folder + Phone Memory + ZIP) */}
       <IngestionModal
         isOpen={isIngestOpen}
         onClose={() => setIsIngestOpen(false)}
         onIngestionComplete={handleIngestionComplete}
-        onOpenPrintAfterIngest={() => handleTriggerQuickPdf('', '')}
       />
 
       {/* Dynamic Column Customizer Modal */}

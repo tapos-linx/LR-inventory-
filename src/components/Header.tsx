@@ -1,278 +1,220 @@
 import React, { useState } from 'react';
 import {
-  FileSpreadsheet,
-  Printer,
-  UploadCloud,
-  SlidersHorizontal,
-  Plus,
-  RefreshCw,
   Layers,
-  Sparkles,
-  Smartphone,
-  ChevronDown,
+  Search,
+  Settings,
+  ArrowLeft,
+  X,
+  MapPin,
   Building2,
-  Download,
-  Users,
-  Fingerprint,
-  Scale,
-  Trash2,
 } from 'lucide-react';
 import { toBengaliNumber } from '../utils/bengaliNumerals';
 
+export type WorkspaceView = 'home' | 'browse' | 'match' | 'export' | 'print';
+
 interface HeaderProps {
   totalRecords: number;
-  filteredCount: number;
-  selectedCount: number;
-  activeView: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis';
-  setActiveView: (view: 'ledger' | 'print' | 'tree' | 'inheritance' | 'forensic' | 'slulis') => void;
-  onOpenIngest: () => void;
-  onOpenColumnCustomizer: () => void;
-  onExportExcel: () => void;
-  onExportCSV: () => void;
-  onAddNewRecord: () => void;
-  onResetToSample: () => void;
-  onOpenApkModal: () => void;
-  onQuickPdfDownload: (upazila?: string) => void;
+  mouzaCount: number;
+  activeView: WorkspaceView;
+  onNavigateHome: () => void;
+  onQuickSearchJump: (query: string, upazila?: string, mouza?: string) => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
   availableUpazilas: string[];
-  onPurgeCacheNow?: () => void;
+  availableMouzas: { mouza: string; upazila: string; count: number }[];
+  onOpenSettings: () => void;
   generatedCacheCount?: number;
 }
 
+const VIEW_LABELS: Record<WorkspaceView, string> = {
+  home: 'হোম ড্যাশবোর্ড',
+  browse: 'মাস্টার লেজার ও হায়ারার্কি',
+  match: 'ওয়ারিশ, ফরেনসিক ও SLULIS ম্যাচিং',
+  export: 'রিপোর্ট ও এক্সপোর্ট সেন্টার',
+  print: 'A4 প্রিন্ট স্টুডিও',
+};
+
 export const Header: React.FC<HeaderProps> = ({
   totalRecords,
-  filteredCount,
-  selectedCount,
+  mouzaCount,
   activeView,
-  setActiveView,
-  onOpenIngest,
-  onOpenColumnCustomizer,
-  onExportExcel,
-  onAddNewRecord,
-  onResetToSample,
-  onOpenApkModal,
-  onQuickPdfDownload,
+  onNavigateHome,
+  onQuickSearchJump,
+  searchQuery,
+  setSearchQuery,
   availableUpazilas,
-  onPurgeCacheNow,
+  availableMouzas,
+  onOpenSettings,
   generatedCacheCount = 0,
 }) => {
-  const [showPdfMenu, setShowPdfMenu] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const q = searchQuery.trim().toLowerCase();
+  const matchingUpazilas = q
+    ? availableUpazilas.filter((u) => u.toLowerCase().includes(q)).slice(0, 4)
+    : availableUpazilas.slice(0, 3);
+  const matchingMouzas = q
+    ? availableMouzas
+        .filter(
+          (m) =>
+            m.mouza.toLowerCase().includes(q) || m.upazila.toLowerCase().includes(q)
+        )
+        .slice(0, 5)
+    : availableMouzas.slice(0, 4);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSearchFocused(false);
+    onQuickSearchJump(searchQuery);
+  };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0c111e]/95 backdrop-blur border-b border-amber-500/20 px-3 sm:px-6 lg:px-8 py-3 transition-colors no-print">
-      <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-3">
-        {/* Zone 1: Wordmark / Brand Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 flex items-center justify-center shadow-md shadow-amber-950/60 ring-1 ring-amber-300/40 shrink-0">
-            <Layers className="w-5 h-5 text-slate-950" />
-          </div>
-          <div className="flex flex-col">
-            <div className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-              <span className="font-bengali">ভূমি রেকর্ড মাস্টার লেজার</span>
-              <span className="text-amber-400 font-normal hidden lg:inline text-xs font-sans tracking-wider border border-amber-500/30 px-2 py-0.5 rounded bg-amber-500/10">
-                LR Master Ledger Studio
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bengali">
-              <span>মোট রেকর্ড: {toBengaliNumber(totalRecords)} টি</span>
-              <span aria-hidden="true" className="text-amber-500/50">·</span>
-              <span>প্রদর্শিত: {toBengaliNumber(filteredCount)} টি</span>
-              {selectedCount > 0 && (
-                <>
-                  <span aria-hidden="true" className="text-amber-500/50">·</span>
-                  <span className="text-amber-300 font-medium">নির্বাচিত: {toBengaliNumber(selectedCount)} টি</span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Zone 2: Navigation / Workspace View Tabs (Single-line controls) */}
-        <nav className="hidden xl:flex items-center gap-1 p-1 bg-[#141b2c] border border-amber-500/20 rounded-lg">
-          <button
-            onClick={() => setActiveView('slulis')}
-            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
-              activeView === 'slulis'
-                ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 border border-amber-300 shadow-md'
-                : 'text-amber-300 hover:text-amber-200 hover:bg-amber-950/40 border border-amber-500/30'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5" />
-            <span>SLULIS: সফর আলী মোকদ্দমা ও সর্বমৌজা তদন্ত</span>
-          </button>
-          <button
-            onClick={() => setActiveView('ledger')}
-            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
-              activeView === 'ledger'
-                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            মাস্টার লেজার গ্রিড
-          </button>
-          <button
-            onClick={() => setActiveView('forensic')}
-            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
-              activeView === 'forensic'
-                ? 'bg-amber-400 text-slate-950 border border-amber-300 shadow-sm'
-                : 'text-amber-300 hover:text-amber-200 hover:bg-amber-950/40'
-            }`}
-          >
-            <Fingerprint className="w-3.5 h-3.5" />
-            <span>ফরেনসিক ম্যাচিং ও রেকর্ড অডিট</span>
-          </button>
-          <button
-            onClick={() => setActiveView('inheritance')}
-            className={`px-2.5 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap font-bengali flex items-center gap-1.5 ${
-              activeView === 'inheritance'
-                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-500/50 shadow-sm'
-                : 'text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/40'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ওয়ারিশ ম্যাচিং তালিকা</span>
-          </button>
-          <button
-            onClick={() => setActiveView('tree')}
-            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
-              activeView === 'tree'
-                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            হায়ারার্কি ও ফাইল ট্রি
-          </button>
-          <button
-            onClick={() => setActiveView('print')}
-            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap font-bengali ${
-              activeView === 'print'
-                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            মৌজাভিত্তিক A4 PDF রিপোর্ট
-          </button>
-        </nav>
-
-        {/* Zone 3: Primary Actions with High-Visibility Buttons */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* SLULIS Investigation Button (Mobile & Tablet) */}
-          <button
-            onClick={() => setActiveView('slulis')}
-            title="SLULIS: সফর আলী বংশধারা সর্বমৌজা তদন্ত ও মোকদ্দমা"
-            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 border border-amber-300 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
-          >
-            <Scale className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-            <span className="hidden sm:inline">SLULIS মোকদ্দমা</span>
-          </button>
-
-          {/* Forensic Audit Quick Button (visible on mobile/tablet) */}
-          <button
-            onClick={() => setActiveView('forensic')}
-            title="FORENSIC MATCHING & LAND RECORD AUDIT"
-            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-amber-200 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/50 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
-          >
-            <Fingerprint className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">ফরেনসিক অডিট</span>
-          </button>
-
-          {/* Warish Matched List Button (visible on all screen sizes) */}
-          <button
-            onClick={() => setActiveView('inheritance')}
-            title="ওয়ারিশ সনদের সাথে ম্যাচকৃত নতুন তালিকা"
-            className="p-2 sm:px-3 sm:py-2 text-xs font-bold text-emerald-200 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali xl:hidden"
-          >
-            <Users className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">ওয়ারিশ ম্যাচ তালিকা</span>
-          </button>
-
-          {/* APK Download Button */}
-          <button
-            onClick={onOpenApkModal}
-            title="অ্যান্ড্রয়েড মোবাইল APK ডাউনলোড"
-            className="p-2 sm:px-3 sm:py-2 text-xs font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">APK ডাউনলোড</span>
-          </button>
-
-          {/* Quick PDF Report Trigger with Dropdown */}
-          <div className="relative">
+    <header className="sticky top-0 z-40 glass-surface border-b border-[var(--border-subtle)] px-3 sm:px-6 lg:px-8 py-3 no-print transition-colors">
+      <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3">
+        {/* Zone 1: Brand Wordmark + Back to Home when in sub-workspace */}
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          {activeView !== 'home' && (
             <button
-              onClick={() => setShowPdfMenu(!showPdfMenu)}
-              className="p-2 sm:px-3 sm:py-2 text-xs font-semibold text-amber-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 rounded-lg shadow-md shadow-amber-950/30 transition-all flex items-center gap-1.5 whitespace-nowrap font-bengali"
+              type="button"
+              onClick={onNavigateHome}
+              className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-input)] hover:bg-emerald-500/15 border border-[var(--border-subtle)] hover:border-[var(--border-accent)] text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5 transition-all shrink-0 font-bengali cursor-pointer"
+              title="হোম স্ক্রিনে ফিরুন"
             >
-              <Printer className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-              <span className="hidden md:inline">মৌজাভিত্তিক PDF ডাউনলোড</span>
-              <span className="md:hidden">PDF</span>
-              <ChevronDown className="w-3 h-3 text-slate-950" />
-            </button>
-
-            {showPdfMenu && (
-              <div
-                className="absolute right-0 mt-2 w-64 bg-[#141b2c] border border-amber-500/30 rounded-xl shadow-2xl py-2 z-50 font-bengali text-xs"
-                onMouseLeave={() => setShowPdfMenu(false)}
-              >
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 border-b border-slate-800">
-                  উপজেলা অনুযায়ী মৌজাভিত্তিক PDF ডাউনলোড:
-                </div>
-                <button
-                  onClick={() => {
-                    onQuickPdfDownload('');
-                    setShowPdfMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-slate-200 hover:bg-amber-500/20 hover:text-amber-300 flex items-center justify-between transition-colors"
-                >
-                  <span className="font-semibold">সকল উপজেলা (পৃথক মৌজা টেবিল)</span>
-                  <Download className="w-3.5 h-3.5 text-amber-400" />
-                </button>
-                {availableUpazilas.map((u) => (
-                  <button
-                    key={u}
-                    onClick={() => {
-                      onQuickPdfDownload(u);
-                      setShowPdfMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-slate-300 hover:bg-slate-800/80 hover:text-white flex items-center justify-between transition-colors"
-                  >
-                    <span>{u} উপজেলা</span>
-                    <Download className="w-3 h-3 text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Excel Export */}
-          <button
-            onClick={onExportExcel}
-            title="এক্সেল এক্সপোর্ট (.xlsx)"
-            className="p-2 sm:px-2.5 sm:py-2 text-xs font-medium text-emerald-300 bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden xl:inline">এক্সেল</span>
-          </button>
-
-          {/* Auto-Purge Cache on Exit & Instant Purge Button */}
-          {onPurgeCacheNow && (
-            <button
-              onClick={onPurgeCacheNow}
-              title="অ্যাপ থেকে বের হলে সকল ক্যাশকৃত ফাইল স্বয়ংক্রিয়ভাবে মুছে যাবে। তাৎক্ষণিক ক্যাশ মুছতে ক্লিক করুন।"
-              className="p-2 sm:px-2.5 sm:py-2 text-xs font-medium text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap font-bengali"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden lg:inline">
-                ক্যাশ ক্লিন {generatedCacheCount > 0 ? `(${toBengaliNumber(generatedCacheCount)})` : '(অটো-এক্সিট)'}
-              </span>
+              <ArrowLeft className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+              <span className="hidden sm:inline">হোম</span>
             </button>
           )}
 
-          {/* Ingest Archive Button */}
           <button
-            onClick={onOpenIngest}
-            className="px-3 sm:px-3.5 py-2 text-xs sm:text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-amber-400/50 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap font-bengali"
+            type="button"
+            onClick={onNavigateHome}
+            className="flex items-center gap-2.5 text-left group cursor-pointer min-w-0"
           >
-            <UploadCloud className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">আর্কাইভ আপলোড</span>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 via-teal-500 to-amber-500 flex items-center justify-center shadow-lg icon-3d shrink-0">
+              <Layers className="w-5 h-5 text-slate-950 stroke-[2.2]" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <div className="text-sm sm:text-base font-bold tracking-tight text-[var(--text-primary)] flex items-center gap-2 truncate font-bengali">
+                <span className="truncate">ভূমি রেকর্ড মাস্টার লেজার</span>
+                {activeView !== 'home' && (
+                  <span className="hidden md:inline text-xs font-medium text-[var(--accent-emerald)]">
+                    · {VIEW_LABELS[activeView]}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)] font-bengali truncate">
+                <span className="font-mono-num">{toBengaliNumber(totalRecords)}</span> টি রেকর্ড
+                <span aria-hidden="true" className="mx-1.5 opacity-60">·</span>
+                <span className="font-mono-num">{toBengaliNumber(mouzaCount)}</span> টি মৌজা
+                <span aria-hidden="true" className="mx-1.5 hidden sm:inline opacity-60">·</span>
+                <span className="hidden sm:inline">১০০% অফলাইন ক্লায়েন্ট-সাইড</span>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {/* Zone 2: Upazila / Mouza Quick Search */}
+        <div className="relative flex-1 max-w-md mx-2">
+          <form onSubmit={handleSubmit} className="relative">
+            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setTimeout(() => setIsSearchFocused(false), 180)}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="উপজেলা, মৌজা, খতিয়ান বা দাগ খুঁজুন..."
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-[var(--surface-input)] border border-[var(--border-subtle)] focus:border-[var(--border-accent)] focus:outline-none text-xs sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-bengali transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5 cursor-pointer"
+                title="সার্চ মুছুন"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </form>
+
+          {isSearchFocused && (matchingUpazilas.length > 0 || matchingMouzas.length > 0) && (
+            <div className="absolute left-0 right-0 mt-2 surface-3d p-2 z-50 font-bengali text-xs shadow-2xl">
+              {matchingUpazilas.length > 0 && (
+                <div className="mb-1.5">
+                  <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    উপজেলা দ্রুত ফিল্টার
+                  </div>
+                  {matchingUpazilas.map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onMouseDown={() => {
+                        setIsSearchFocused(false);
+                        onQuickSearchJump('', u, '');
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/12 text-[var(--text-primary)] flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                        <span>{u} উপজেলা</span>
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)]">লেজার দেখুন →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {matchingMouzas.length > 0 && (
+                <div>
+                  <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    মৌজা দ্রুত নির্বাচন
+                  </div>
+                  {matchingMouzas.map((m) => (
+                    <button
+                      key={`${m.upazila}_${m.mouza}`}
+                      type="button"
+                      onMouseDown={() => {
+                        setIsSearchFocused(false);
+                        onQuickSearchJump('', m.upazila, m.mouza);
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/12 text-[var(--text-primary)] flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
+                        <span className="truncate font-medium">{m.mouza}</span>
+                        <span className="text-[11px] text-[var(--text-muted)] truncate">
+                          ({m.upazila})
+                        </span>
+                      </span>
+                      <span className="font-mono-num text-[11px] text-[var(--accent-emerald)] shrink-0">
+                        {toBengaliNumber(m.count)} রেকর্ড
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Zone 3: Settings Gear Icon ONLY */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="সেটিংস ও ইউটিলিটিজ খুলুন"
+            title="সেটিংস (থিম, APK ডাউনলোড, নমুনা ডাটা, আর্কাইভ ট্রি ও ক্যাশ ক্লিন)"
+            className="relative p-2.5 rounded-xl bg-[var(--surface-input)] hover:bg-emerald-500/15 border border-[var(--border-subtle)] hover:border-[var(--border-accent)] text-[var(--text-primary)] transition-all cursor-pointer flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4 text-[var(--accent-gold)]" />
+            <span className="hidden md:inline text-xs font-semibold font-bengali">সেটিংস</span>
+            {generatedCacheCount > 0 && (
+              <span
+                className="w-2 h-2 rounded-full bg-emerald-400"
+                title={`ক্যাশ ট্র্যাকিং সক্রিয় (${toBengaliNumber(generatedCacheCount)})`}
+              />
+            )}
           </button>
         </div>
       </div>

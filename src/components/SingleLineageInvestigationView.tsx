@@ -54,6 +54,7 @@ interface SingleLineageInvestigationViewProps {
   onBack: () => void;
   onNavigateToForensic?: (tab?: string) => void;
   initialTab?: SlulisTabId;
+  embedded?: boolean;
 }
 
 export type SlulisTabId =
@@ -74,6 +75,7 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
   onBack,
   onNavigateToForensic,
   initialTab = 'summary',
+  embedded = false,
 }) => {
   const [activeTab, setActiveTab] = useState<SlulisTabId>(initialTab);
   const [selectedDagFilter, setSelectedDagFilter] = useState<string>('all');
@@ -253,14 +255,18 @@ export const SingleLineageInvestigationView: React.FC<SingleLineageInvestigation
       {/* Top Navigation & Breadcrumbs Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0d1424] border border-amber-500/40 rounded-xl p-3.5 shadow-lg">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span>মূল লেজার ড্যাশবোর্ড</span>
-          </button>
-          <span className="text-slate-500">/</span>
+          {!embedded && (
+            <>
+              <button
+                onClick={onBack}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>মূল লেজার ড্যাশবোর্ড</span>
+              </button>
+              <span className="text-slate-500">/</span>
+            </>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
               <Scale className="w-3.5 h-3.5" />

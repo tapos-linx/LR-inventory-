@@ -76,6 +76,7 @@ interface ForensicAuditViewProps {
   onRollbackLedgerVersion: (versionEntry: LedgerAuditVersionEntry) => void;
   versionHistory: LedgerAuditVersionEntry[];
   initialTab?: ReportTabId;
+  embedded?: boolean;
 }
 
 export type ReportTabId =
@@ -135,6 +136,7 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
   onRollbackLedgerVersion,
   versionHistory,
   initialTab = 'report2',
+  embedded = false,
 }) => {
   // Active Workflow Step & Active Report Tab
   const [activeStep, setActiveStep] = useState<number>(10);
@@ -1237,16 +1239,22 @@ export const ForensicAuditView: React.FC<ForensicAuditViewProps> = ({
   return (
     <div className="flex-1 bg-[#090d16] text-slate-100 font-bengali">
       {/* Top Sticky Forensic Command Bar */}
-      <div className="no-print sticky top-[61px] z-30 bg-[#0e1525]/95 backdrop-blur border-b border-amber-500/30 px-4 sm:px-8 py-3">
+      <div
+        className={`no-print sticky ${
+          embedded ? 'top-0' : 'top-[61px]'
+        } z-30 bg-[#0e1525]/95 backdrop-blur border-b border-amber-500/30 px-4 sm:px-8 py-3`}
+      >
         <div className="max-w-[1720px] mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 border border-slate-700"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
-              <span>মাস্টার লেজারে ফিরুন</span>
-            </button>
+            {!embedded && (
+              <button
+                onClick={onBack}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 border border-slate-700"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+                <span>মাস্টার লেজারে ফিরুন</span>
+              </button>
+            )}
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
